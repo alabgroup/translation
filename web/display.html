@@ -1,0 +1,126 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Translation — Display</title>
+  <style>
+    :root {
+      --font-family: Georgia, 'Times New Roman', serif;
+      --font-size: 56px;
+      --text-color: #f5f5f0;
+      --bg-color: #000000;
+    }
+    html, body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      height: 100%;
+      background: var(--bg-color);
+      overflow: hidden;
+    }
+    #stage {
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+      height: 100vh;
+      padding: 4vh 6vw;
+      gap: 0.35em;
+    }
+    p {
+      margin: 0;
+      font-family: var(--font-family);
+      font-size: var(--font-size);
+      color: var(--text-color);
+      line-height: 1.3;
+      opacity: 0;
+      transform: translateY(8px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+    }
+    p.visible { opacity: 1; transform: translateY(0); }
+    p.aging { opacity: 0.45; }
+    #indicator {
+      font-family: var(--font-family);
+      font-size: calc(var(--font-size) * 0.5);
+      color: var(--text-color);
+      opacity: 0;
+      transition: opacity 0.3s ease;
+      letter-spacing: 0.15em;
+    }
+    #indicator.active { opacity: 0.35; animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse {
+      0%, 100% { opacity: 0.15; }
+      50% { opacity: 0.5; }
+    }
+  </style>
+</head>
+<body>
+  <div id="stage">
+    <div id="indicator">● ● ●</div>
+  </div>
+
+  <script>
+    const stage = document.getElementById("stage");
+    const indicator = document.getElementById("indicator");
+    const root = document.documentElement.style;
+
+    let maxLines = 4;
+    let showIndicator = true;
+    let indicatorTimer = null;
+
+    function applyDisplayConfig(cfg) {
+      root.setProperty("--font-family", cfg.font_family);
+      root.setProperty("--font-size", cfg.font_size_px + "px");
+      root.setProperty("--text-color", cfg.text_color);
+      root.setProperty("--bg-color", cfg.background_color);
+      maxLines = cfg.max_lines;
+      showIndicator = cfg.show_live_indicator;
+      if (!showIndicator) indicator.classList.remove("active");
+    }
+
+    function trimLines() {
+      const paragraphs = stage.querySelectorAll("p");
+      for (let i = 0; i < paragraphs.length - maxLines; i++) {
+        paragraphs[i].remove();
+      }
+    }
+
+    function appendParagraph(text) {
+      stage.querySelectorAll("p").forEach((p) => p.classList.add("aging"));
+      const p = document.createElement("p");
+      p.textContent = text;
+      stage.insertBefore(p, indicator);
+      trimLines();
+      requestAnimationFrame(() => p.classList.add("visible"));
+      indicator.classList.remove("active");
+    }
+
+    function pulseIndicator() {
+      if (!showIndicator) return;
+      indicator.classList.add("active");
+      clearTimeout(indicatorTimer);
+      indicatorTimer = setTimeout(() => indicator.classList.remove("active"), 2500);
+    }
+
+    function connectWS() {
+      const ws = new WebSocket(`${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/ws`);
+      ws.onmessage = (evt) => {
+        const msg = JSON.parse(evt.data);
+        if (msg.type === "config") {
+          applyDisplayConfig(msg.display);
+        } else if (msg.type === "partial_source") {
+          pulseIndicator();
+        } else if (msg.type === "committed") {
+          appendParagraph(msg.translated_text);
+        } else if (msg.type === "status" && msg.state !== "listening") {
+          indicator.classList.remove("active");
+        }
+      };
+      ws.onclose = () => setTimeout(connectWS, 1000);
+    }
+
+    connectWS();
+  </script>
+</body>
+</html>

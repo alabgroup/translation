@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Translation — Control Panel</title>
+  <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+  <header>
+    <h1>Live Translation</h1>
+    <div class="header-right">
+      <span id="statusPill" class="status-pill"><span class="status-dot"></span><span id="statusText">idle</span></span>
+      <button id="displayLinkBtn" class="link" type="button">Open Display ↗</button>
+      <button id="startStopBtn" class="primary" type="button">Start</button>
+    </div>
+  </header>
+
+  <main id="mainGrid">
+    <section id="setupPanel">
+      <h2>Setup</h2>
+      <div class="field locks-pipeline">
+        <label>Audio input device</label>
+        <select id="deviceSelect"></select>
+      </div>
+      <div class="field locks-pipeline">
+        <label>Source language</label>
+        <input id="sourceLang" type="text" list="langList" value="en">
+      </div>
+      <div class="field locks-pipeline">
+        <label>Target language</label>
+        <input id="targetLang" type="text" list="langList" value="es">
+        <datalist id="langList">
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="ko">Korean</option>
+          <option value="zh">Chinese</option>
+          <option value="vi">Vietnamese</option>
+          <option value="tl">Tagalog</option>
+          <option value="pt">Portuguese</option>
+          <option value="fr">French</option>
+          <option value="ja">Japanese</option>
+          <option value="de">German</option>
+        </datalist>
+      </div>
+      <div class="field locks-pipeline">
+        <label>Whisper model size</label>
+        <select id="whisperModel">
+          <option value="base.en">base.en (fastest, least accurate)</option>
+          <option value="small.en" selected>small.en (recommended start)</option>
+          <option value="medium.en">medium.en (needs a GPU for real time)</option>
+        </select>
+        <div class="hint">See docs/SPEC.md §3 — bake this off against your venue's actual machine.</div>
+      </div>
+      <div class="field locks-pipeline">
+        <label>MT vendor</label>
+        <select id="mtVendor">
+          <option value="claude" selected>Claude Haiku 4.5 (leading candidate)</option>
+          <option value="deepl">DeepL (fallback)</option>
+        </select>
+      </div>
+      <div class="restart-note">Setup fields apply on the next Start — stop first to change them mid-service.</div>
+
+      <h2>Glossary</h2>
+      <div class="field">
+        <textarea id="glossary" placeholder="term=translation, one per line&#10;e.g. Trinity=Trinidad"></textarea>
+        <div class="hint">Applies live. Keeps proper nouns / Scripture references consistent (SPEC §4).</div>
+      </div>
+    </section>
+
+    <section id="chunkingPanel">
+      <h2>Chunking (live)</h2>
+      <div class="field">
+        <label>Silence threshold <span class="value" id="silenceThresholdVal"></span></label>
+        <input id="silenceThreshold" type="range" min="200" max="1500" step="50">
+        <div class="hint">Pause length that closes a phrase (SPEC §5, rule 1).</div>
+      </div>
+      <div class="field">
+        <label>Settle buffer <span class="value" id="settleBufferVal"></span></label>
+        <input id="settleBuffer" type="range" min="0" max="500" step="50">
+        <div class="hint">Extra wait past the pause before committing, to avoid retractions (rule 2).</div>
+      </div>
+      <div class="field">
+        <label>Max chunk duration <span class="value" id="maxDurationVal"></span></label>
+        <input id="maxDuration" type="range" min="5" max="15" step="0.5">
+        <div class="hint">Forces a cut on run-on speech even without a pause (rule 3).</div>
+      </div>
+      <div class="field">
+        <label>Min chunk duration <span class="value" id="minDurationVal"></span></label>
+        <input id="minDuration" type="range" min="0.5" max="3" step="0.1">
+        <div class="hint">Guards against fragmenting on a quick breath (rule 4).</div>
+      </div>
+      <div class="field">
+        <label>MT context window <span class="value" id="contextWindowVal"></span></label>
+        <input id="contextWindow" type="range" min="0" max="4" step="1">
+        <div class="hint">Prior committed chunks fed to the translator for coherence (rule 5).</div>
+      </div>
+
+      <h2>Display styling (live)</h2>
+      <div class="field">
+        <label>Font size <span class="value" id="fontSizeVal"></span></label>
+        <input id="fontSize" type="range" min="32" max="96" step="2">
+      </div>
+      <div class="field">
+        <label>Max lines shown <span class="value" id="maxLinesVal"></span></label>
+        <input id="maxLines" type="range" min="1" max="8" step="1">
+      </div>
+      <div class="field">
+        <label>Text color</label>
+        <input id="textColor" type="color">
+      </div>
+      <div class="field">
+        <label>Background color</label>
+        <input id="bgColor" type="color">
+      </div>
+      <div class="field">
+        <label><input id="showLiveIndicator" type="checkbox" style="width:auto;"> Show live indicator while listening</label>
+      </div>
+    </section>
+
+    <section id="feedsPanel">
+      <h2>Source (live transcription)</h2>
+      <div id="sourceFeed" class="feed"><div class="feed-empty">Nothing yet — click Start.</div></div>
+
+      <h2>Translation (output)</h2>
+      <div id="translationFeed" class="feed"><div class="feed-empty">Nothing yet.</div></div>
+    </section>
+  </main>
+
+  <script src="/static/control.js"></script>
+</body>
+</html>

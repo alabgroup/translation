@@ -316,7 +316,18 @@ recorded evidence, not intuition:
 
 ---
 
-## 7. Open decisions before implementation starts
+## 7. Implementation status
+
+v1 is implemented — `server/` (audio capture, VAD, chunker, ASR, MT,
+FastAPI app) and `web/` (control panel + OBS display page). The
+chunking algorithm's boundary logic (pause commit, min-duration
+folding, max-duration clause-boundary walk-back) is covered by scripted
+tests against a fake clock and fake ASR. See `docs/RUNBOOK.md` for how
+to run it and exactly what has/hasn't been validated end-to-end yet —
+real audio hardware, real ASR/MT quality, and the browser UI itself
+still need a live check on your machine.
+
+## 8. Open decisions before a live service
 
 **Decided:**
 - ASR: local `faster-whisper` (§3) — free, no venue-internet
