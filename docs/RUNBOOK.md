@@ -29,6 +29,24 @@ Open **`http://localhost:8000/`** — that's the control panel. Open
 **`http://localhost:8000/display`** in a second tab/window — that's the
 clean projector view.
 
+## Testing against a recording before a live service
+
+You don't need a live mic to test the real ASR/chunking/MT pipeline —
+`scripts/test_with_file.py` runs it against any audio file and prints
+each committed chunk (and its translation) as it would appear live.
+This is the tool for the evaluation plan in docs/SPEC.md §5: record a
+real sermon, run it through this, and look at where chunk boundaries
+actually landed.
+
+```bash
+python scripts/test_with_file.py path/to/sermon.mp3
+python scripts/test_with_file.py path/to/sermon.wav --no-translate   # skip MT, no API key needed
+python scripts/test_with_file.py sermon.mp3 --silence-threshold-ms 450 --max-chunk-duration-s 8
+```
+
+Requires `ffmpeg` on PATH for non-WAV input; a WAV file works even
+without ffmpeg installed (falls back to a pure-Python resample).
+
 ## Day-of-service checklist
 
 1. **Plug in the USB-C audio interface before starting the app** (or
@@ -72,16 +90,40 @@ Built and verified in this environment:
   the max-duration fallback walking back to a clause boundary instead
   of hard-cutting — verified with a scripted fake clock and fake ASR
   hitting the exact numbers the logic should produce.
+- **The real `webrtcvad` library and real chunker, against real speech
+  audio** (a synthesized TTS clip, since this sandbox has no
+  microphone) — confirmed VAD correctly flags speech frames and the
+  max-duration fallback fires as designed on continuous speech. One
+  honest caveat from that run: synthesized TTS speech has almost no
+  natural pauses, so it only exercised the max-duration fallback path
+  (rule 3), not the more common pause-triggered path (rule 1) — a real
+  recording with natural breath pauses is needed to see rule 1 in
+  action, which is exactly what the file-based harness below is for.
+- The control panel and display page rendered in a real (headless)
+  browser via Playwright, WebSocket-connected to the real FastAPI app,
+  confirming the config-sync/live-feed/display wiring actually works —
+  see the screenshots shared earlier in this session.
 
-Not testable in this sandbox (no audio hardware, no GPU, no live API
-keys here) — needs a real run on your machine before a live service:
+Blocked in this sandbox specifically (its network egress allowlist
+covers GitHub/PyPI/npm/the Anthropic API, not arbitrary domains):
+- Downloading real faster-whisper model weights — hosted on
+  `huggingface.co`, which isn't reachable from here. ASR was tested
+  structurally (imports, call signatures) but not with real weights.
+- Fetching arbitrary external audio (e.g. a podcast CDN URL) to test
+  against directly.
+
+Not testable in this sandbox at all (no mic, no GPU, no live API keys
+here) — needs a real run on your machine before a live service:
 - Actual USB-C capture end-to-end.
 - Real Whisper transcription quality/latency on your pastors' voices
-  and room acoustics.
+  and room acoustics — including how rule 1 (pause-triggered commit)
+  behaves on natural speech, not just rule 3 as seen here.
 - Real Claude Haiku 4.5 / DeepL translation quality and latency —
   this is exactly the bake-off docs/SPEC.md §4 already calls for.
-- The web UI rendered in an actual browser (built and reasoned through
-  carefully, but not click-tested in a real browser session here).
 
-Treat the first live run as the actual first data point for the
-evaluation plan in docs/SPEC.md §5, not as a formality.
+**`scripts/test_with_file.py`** closes most of this gap without a live
+mic — point it at a real recording (a downloaded sermon, a phone
+recording, whatever you have) and it runs the real ASR + chunking +
+MT pipeline against it, printing each committed chunk and translation.
+That's the first real test to run once you're on your own machine —
+see "Testing against a recording before a live service" above.

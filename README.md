@@ -33,6 +33,8 @@ web/       control panel (start/stop, live feeds, live-tunable params)
 config/    default.yaml — starting values for everything the control
            panel can also change live
 docs/      SPEC.md (design/vendor decisions), RUNBOOK.md (how to run it)
+scripts/   test_with_file.py — run the real pipeline against a recorded
+           file instead of a live mic (no hardware needed to evaluate)
 ```
 
 ## Status
