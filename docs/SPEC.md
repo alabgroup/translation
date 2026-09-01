@@ -151,6 +151,37 @@ to whichever MT layer supports custom terms (DeepL glossary, Azure
 custom terminology, or a system-prompt term list for LLM MT). Generic MT
 reliably mangles proper nouns and Scripture references without this.
 
+**Leading candidate (not yet final): Claude Haiku 4.5.** The four
+options above are close on cost and predictable latency, but sermon
+content has a requirement none of the pure-NMT engines can meet:
+steerability. DeepL/Azure/Google translate whatever fragment they're
+given, literally, with no way to instruct them on run-on sentence
+handling or how to treat a mid-clause chunk boundary — only a static
+glossary. An LLM can be given explicit rules in its system prompt:
+preserve run-on cadence rather than "fixing" it into shorter sentences,
+translate a fragment as a fragment rather than completing it, hold
+theological register, keep Scripture references and recurring phrases
+consistent using the same glossary mechanism. That's the one criterion
+("how does it handle sermons especially") the matrix above can't show
+in a pricing table.
+
+Two risks to specifically test before locking this in, both called out
+above and neither yet validated:
+1. **Latency per call is an estimate (~300–600ms), not a benchmark** —
+   unlike DeepL/Azure/Google's well-documented ~150–350ms. If it lands
+   materially worse under real load, that's a hard latency cost stacked
+   on top of the already-accepted local-Whisper delay from §3.
+2. **Prompt discipline against over-helpfulness** — an LLM given a bare
+   10–15 word fragment may "helpfully" complete or paraphrase it rather
+   than translating literally. The system prompt needs an explicit rule
+   against this, and it needs to be verified on real fragments, not
+   assumed to hold.
+
+DeepL is the fallback if either risk doesn't pan out: best off-the-shelf
+quality among the pure-NMT options, least engineering effort, and its
+narrower language list isn't a real constraint for the confirmed
+English→Spanish default.
+
 ---
 
 ## 5. Chunking algorithm — "when is a phrase done?"
