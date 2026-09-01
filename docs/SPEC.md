@@ -68,48 +68,98 @@ flowchart LR
 | **faster-whisper / whisper.cpp** (+ streaming wrapper, e.g. "local agreement" buffering) | Local, batch model retrofitted to stream | ~1.5–3s+ to committed text, even with fast compute | Whisper's raw accuracy is excellent, but it wasn't built to emit partials — the wrapper's agreement-buffering is what costs the latency | Medium — GPU recommended, wrapper adds complexity |
 | **Moonshine** | Local, small model, edge-oriented | Fast on CPU/small devices but lower accuracy than the above | Interesting for a battery/offline fallback rig, not the primary pick | Low |
 
-**Recommendation: Deepgram Nova-3 or Azure Speech for v1.** Both are
-streaming-native (not batch-retrofitted), which is the single biggest
-latency lever — bigger than cloud-vs-local. *Confidence: 8/10 on the
-ordering; vendor benchmarks shift roughly every 6–12 months, so re-check
-before a hard commitment.*
+**Decision for v1: local, free, small-model Whisper (faster-whisper).**
+Cost and no-dependency-on-venue-internet were prioritized over shaving
+the last few hundred ms off latency. Specifically:
+
+- **Engine:** `faster-whisper` (CTranslate2 runtime — meaningfully
+  faster than stock `openai-whisper`/HF transformers on the same
+  hardware, int8/float16 quantized).
+- **Model size:** start with `small.en` (English source) — best
+  accuracy-per-latency point below `medium`; drop to `base.en` if the
+  venue machine is CPU-only and can't sustain `small` in real time, or
+  move up to `medium.en` if a GPU is available and accuracy on pulpit
+  audio (mic bleed, room reverb, accents) needs it. Bake this off on
+  real recordings, don't guess.
+- **Streaming wrapper:** Whisper is batch, not streaming — use the
+  "local agreement" pattern (à la `whisper_streaming`): re-transcribe a
+  sliding window every ~500ms–1s, only emit/commit words that agree
+  across consecutive hypotheses. This is what makes the latency
+  numbers in the table above achievable at all with a batch model.
+- **Cost:** $0. **Latency tradeoff accepted:** ~1.5–3s to committed
+  text vs. ~150–400ms for a streaming-native cloud/GPU model — this is
+  the real price of "free and local," not a rounding error. It's
+  mitigated somewhat by the two-tier display (§5, rule 6): the live
+  partial transcript still shows motion during that window, so the
+  audience isn't staring at a frozen screen even though committed text
+  lags.
+- **Swap path kept open:** the ASR client sits behind the same thin
+  interface as MT (§4) — if the 1.5–3s commit latency proves too slow
+  once you've heard it live, NVIDIA Parakeet-TDT (still local, still
+  free-ish, but streaming-native and GPU-required) is the documented
+  next step, not Deepgram/Azure — that keeps the "free and local"
+  constraint if latency needs to improve without going back to a paid
+  cloud dependency.
+
+*Confidence: 7/10 on the ordering of model sizes and the streaming-
+wrapper approach; the exact model that holds up on your pastors'
+specific voices/accents/room acoustics is something to verify by ear,
+not assume from a spec.*
 
 ---
 
-## 4. MT (translation) options
+## 4. MT (translation) options — pricing × latency matrix
 
-| Option | Type | Latency add-on | Notes |
-|---|---|---|---|
-| **Azure AI Speech Translation** | Combined ASR+MT, one streaming call | None extra — no second network hop | Segmentation ("when is a phrase done") is a first-class config parameter (`SegmentationSilenceTimeoutMs`), which maps directly onto §5 below. Simplest integration; translation quality is solid but generally a notch below specialist MT on the hardest language pairs. |
-| **DeepL API** | Cloud, text MT, called after ASR | ~150–350ms per call | Best-in-class quality on EN↔ES and most European pairs; supports custom glossaries (useful for consistent rendering of proper nouns, book names). Narrower language coverage (~30+ langs) than Google. |
-| **Google Cloud Translation (NMT)** | Cloud, text MT | ~150–350ms | Broadest language coverage; good general quality. |
-| **LLM-based MT (Claude Haiku 4.5 / GPT-4o-mini)** | Cloud, text MT via chat completion | ~300–600ms | Best at handling register, idiom, and — critically for this use case — quoted Scripture and theological vocabulary, if given a glossary/system prompt. Higher latency and cost per call; needs careful prompting to avoid the model "helpfully" expanding or paraphrasing short fragments instead of translating them literally. |
-| **NLLB-200 (distilled, local)** | Local MT model | ~50–200ms on GPU | No network hop, 200-language coverage, decent but not best-in-class quality; adds a second model's VRAM footprint alongside local ASR if you go fully local. |
+**Status: intentionally still open.** ASR is now local/free (§3), so the
+MT call is the only per-word cost and the only remaining network hop in
+the pipeline — worth picking with real numbers rather than a gut call.
+The plan is to iterate on this against actual pipeline runs, not lock it
+in from the spec.
 
-**Recommendation: Azure AI Speech Translation for v1** — folding ASR+MT
-into one streaming call removes an entire network round trip and gives
-you native chunk-boundary control, which directly serves priority #1
-(latency) and priority #3 (no flicker). Design the MT layer behind a
-thin interface so DeepL or LLM-based MT (better for idiom/Scripture
-fidelity) can be swapped in per-language-pair later without touching the
-orchestrator. *Confidence: 6/10 — this is the highest-leverage decision
-in the whole spec and worth a side-by-side bake-off with real sermon
-audio before locking in; don't take this recommendation as final without
-testing.*
+Cost basis for the "$/sermon" column: a ~45-minute sermon at ~130
+words/min ≈ 5,850 words ≈ **~35,000 characters** (English source).
+Chunked at the §5 defaults (avg. ~15 words/chunk, ~7s of speech) that's
+roughly **~390 translation calls per sermon** — the call count matters
+for the LLM-based row, where per-call overhead (not just character
+count) drives cost and latency.
 
-**Church-specific consideration:** maintain a small glossary (translator/
-book names, denomination-specific terms, the pastor's recurring phrases)
-and pass it to whichever MT layer supports custom terms (DeepL glossary,
-or a system-prompt term list for LLM MT). Generic MT reliably mangles
-proper nouns and Scripture references without this.
+| Option | Pricing (source: vendor pricing pages, checked Sep 2026) | Est. cost / 45-min sermon | Est. latency per call | Notes |
+|---|---|---|---|---|
+| **DeepL API** (Pro pay-as-you-go) | $5.49 / million characters, no monthly cap ([source](https://www.eesel.ai/blog/deepl-pricing)) | **~$0.19** | ~150–350ms | Best-in-class quality on EN↔ES and most European pairs; supports custom glossaries. Growth plan ($26/mo, 1M chars/mo included) effectively makes this flat-rate for a single-venue church. Narrower language coverage (~30+ langs) than Google. |
+| **Azure AI Translator** | $10 / million characters; **2M chars/month free for the first year** ([source](https://azure.microsoft.com/en-in/pricing/details/translator/)) | **~$0.35** (likely **$0** in year one) | ~150–350ms | 130+ languages, glossary/custom terminology support. Cheapest at true scale via commitment tiers if this ever grows beyond one venue. |
+| **Google Cloud Translation (NMT)** | $20 / million characters; 500K chars/month free ([source](https://cloud.google.com/translate/pricing)) | **~$0.70** (free under ~14 sermons/month) | ~150–350ms | Broadest language coverage; good general quality; glossary support via AutoML/custom models. |
+| **LLM-based MT — Claude Haiku 4.5** | $1.00 / MTok input, $5.00 / MTok output | **~$0.13–0.20** (≈390 calls × ~220 in / ~25 out tokens each; drops further with prompt caching on the shared glossary/system prompt) | **Unvalidated — estimate ~300–600ms**, needs a real benchmark before trusting it | Best of the group at handling register, idiom, and — specifically relevant here — quoted Scripture and theological vocabulary, given a glossary in the system prompt. Needs careful prompting so it translates short fragments literally instead of "helpfully" paraphrasing or completing them. Cost is a non-issue at this volume for any of these vendors — the real tradeoff is latency-per-call and fragment-literalness, not price. |
+| **NLLB-200 (distilled, local)** | $0 (self-hosted) | **$0** | ~50–200ms on GPU (no network hop) | No per-word cost, no network dependency — pairs naturally with the local-ASR decision in §3 if venue internet ever becomes the constraint. Quality is decent but a step below the specialist cloud APIs above; would need its own bake-off against sermon audio. |
+
+**Reading the matrix:** at this call volume (~390 short calls/sermon,
+a few times a week), **every option costs pennies to a few dollars a
+month** — cost is not the deciding factor here, whatever the framing
+above suggests. The real axes to bake off against actual pipeline runs
+are (a) **latency per call**, since this stacks directly onto the ASR
+commit latency from §3, and (b) **fragment quality** — does the vendor
+translate a bare 10–15-word clause correctly without either literal-
+but-awkward output (hurts readability) or over-confident paraphrasing
+(hurts faithfulness to what was actually said, which matters more here
+than in casual captioning). Haiku's per-call latency above is an
+estimate, not a benchmark — measure it directly before weighing it
+against DeepL/Azure/Google's more predictable ~150–350ms.
+
+**Church-specific consideration, applies to whichever vendor is
+chosen:** maintain a small glossary (translator/book names,
+denomination-specific terms, the pastor's recurring phrases) and pass it
+to whichever MT layer supports custom terms (DeepL glossary, Azure
+custom terminology, or a system-prompt term list for LLM MT). Generic MT
+reliably mangles proper nouns and Scripture references without this.
 
 ---
 
 ## 5. Chunking algorithm — "when is a phrase done?"
 
-This is the actual hard problem. Pause-only chunking breaks on
-run-on preachers; fixed-duration chunking breaks readability and often
-cuts mid-clause. The design below is a hybrid, modeled on how live
+**Decision: adopt this design as the v1 first pass, then tune it with
+evals against real recordings rather than guessing at the numbers
+up front.** This is the actual hard problem. Pause-only chunking breaks
+on run-on preachers; fixed-duration chunking breaks readability and
+often cuts mid-clause. The design below is a hybrid, modeled on how live
 broadcast captioning and simultaneous-interpretation systems solve the
 same problem (VAD + max-duration fallback + a short settle buffer before
 committing). *Confidence: 8/10 that this general shape is right; the
@@ -181,6 +231,41 @@ chunking:
   mt_context_window: 2
 ```
 
+### Evaluation plan — tuning the defaults against real runs
+
+Ship the numbers above as the starting config, then tune them from
+recorded evidence, not intuition:
+
+1. **Collect real audio.** Record several full sermons (ideally from
+   more than one pastor — pacing varies a lot person to person) through
+   the actual capture path.
+2. **Run the pipeline offline** against those recordings with logging
+   on every chunk boundary: what triggered it (pause vs. max-duration
+   fallback), the chunk's duration, and its word count.
+3. **Score against a small set of metrics:**
+   - **% of chunks closed by pause vs. forced by max-duration** — a
+     healthy pipeline should be pause-dominated; a high forced-cut rate
+     on a given pastor means `max_chunk_duration_s` or
+     `silence_threshold_ms` needs adjusting for their delivery style.
+   - **Chunk duration distribution** — flag chunks near the
+     `min_chunk_duration_s` floor (near-fragmentation) and chunks near
+     the `max_chunk_duration_s` ceiling (near-runaway) as the two
+     failure edges to inspect by ear.
+   - **Readability of forced cuts** — manually review a sample of
+     max-duration-triggered cuts: did the clause-boundary walk-back
+     (rule 3) land somewhere sensible, or mid-phrase?
+   - **Commit-to-display latency**, measured end to end, not just the
+     chunking logic in isolation — this is the number that actually
+     matters to someone watching the screen.
+   - **Retraction rate** — how often the settle buffer (rule 2) still
+     wasn't enough and a committed chunk had to be visually corrected;
+     should be ~0 by design, so any non-zero rate is a bug, not a
+     tuning target.
+4. **Adjust one parameter at a time** against the same recording set
+   and re-score, rather than changing several defaults at once — this
+   is what makes the tuning attributable instead of guesswork with
+   extra steps.
+
 ---
 
 ## 6. Display
@@ -202,13 +287,24 @@ chunking:
 
 ## 7. Open decisions before implementation starts
 
-1. Confirm ASR + MT vendor pick (§3–4) — recommend running a short
-   bake-off against 5–10 minutes of real sermon audio, not just specs.
-2. API keys/accounts for the chosen cloud vendor(s).
+**Decided:**
+- ASR: local `faster-whisper` (§3) — free, no venue-internet
+  dependency, latency tradeoff accepted knowingly.
+- Chunking: adopt the §5 design and defaults as v1, tune via the
+  evaluation plan against real recordings rather than pre-guessing.
+- Default language pair: **English → Spanish** for initial build/test.
+
+**Still open:**
+1. **MT vendor** (§4) — the pricing/latency matrix is built; pick one
+   (or run the DeepL/Azure/Google/Haiku bake-off in parallel with early
+   implementation) once real per-call latency numbers are in hand,
+   especially for the LLM-based option, which is currently an estimate.
+2. API key/account for whichever MT vendor is chosen.
 3. Confirm the USB-C audio interface model, so capture code targets the
    right driver/sample format.
-4. Default source→target language pair confirmed as **English → Spanish**
-   for initial build/test.
+4. Local machine spec at the venue (CPU-only vs. GPU-available) — this
+   decides whether `small.en` or `base.en` is the realistic Whisper
+   model size for v1.
 
 ---
 *This spec is a starting point for review, not a committed architecture.*
