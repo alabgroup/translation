@@ -39,10 +39,11 @@ HALLUCINATION_PHRASES = {
 # Names are used in the overlay URLs (/display/spanish), so keep them URL-friendly.
 # "zh" is Mandarin Chinese in simplified script.
 TARGET_LANGS = {
-    "Portuguese": "pt",
     "Spanish": "es",
     "Chinese": "zh",
 }
+# Portuguese is installed and configured below; add "Portuguese": "pt" back
+# here to bring it on screen again.
 
 # --- Live-tunable settings ---
 # Exposed as sliders on the control page and changed while the service runs.

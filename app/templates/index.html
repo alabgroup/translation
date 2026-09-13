@@ -248,9 +248,20 @@
   /* Tiles are sized in script: each frame keeps an exact 8:9 - the left half
      of a 16:9 canvas - while the row grows to fill whatever height is left. */
   #compare {
-    display: flex; gap: 14px; flex: 1 1 auto; min-height: 0;
-    align-items: flex-start; justify-content: flex-start;
+    display: grid; gap: 14px; flex: 1 1 auto; min-height: 0;
+    align-content: start; justify-content: start;
   }
+  /* Columns control */
+  .cols { display: flex; gap: 2px; padding: 2px; background: var(--surface-2);
+          border-radius: 8px; }
+  .col-opt {
+    font: inherit; font-size: 11px; font-weight: 560; min-width: 26px;
+    padding: 3px 7px; border: 0; border-radius: 6px; cursor: pointer;
+    background: transparent; color: var(--label-2);
+    transition: background 160ms ease, color 160ms ease;
+  }
+  .col-opt:hover { color: var(--label); }
+  .col-opt[aria-pressed="true"] { background: var(--surface-3); color: var(--label); }
   .tile { position: relative; cursor: pointer; border: 0; padding: 0;
           background: none; text-align: left; flex: none; }
   .tile-frame {
@@ -374,7 +385,10 @@
   <div id="stage">
     <div class="stage-head">
       <p class="section-title" style="margin:0">Languages — click to put one on screen</p>
-      <span class="live"><span class="dot" id="live-dot"></span><span id="live-text">idle</span></span>
+      <div style="display:flex; align-items:center; gap:12px">
+        <div class="cols" id="cols"></div>
+        <span class="live"><span class="dot" id="live-dot"></span><span id="live-text">idle</span></span>
+      </div>
     </div>
     <div id="compare"></div>
     <div id="feed-wrap">
@@ -707,27 +721,78 @@
     sizeTiles();
   }
 
-  // Give every frame an exact 8:9 box, as large as the row allows. Prefer
-  // filling the available height; fall back to width when the row is narrow.
+  // Every frame keeps an exact 8:9 - the left half of a 16:9 canvas. With a
+  // tall narrow shape, one row of four ends up short and wide; wrapping to
+  // three across usually yields a much larger tile. Try every column count
+  // and keep whichever makes the tiles biggest in the space available.
   const TILE_GAP = 14, TILE_BAR = 30, TILE_RATIO = 8 / 9;
+  const colsBar = document.getElementById("cols");
+  let forcedCols = null;
+  try {
+    const saved = parseInt(localStorage.getItem("tileCols"), 10);
+    if (saved) forcedCols = saved;
+  } catch (err) {}
+
+  function tileWidthFor(cols, count, width, height) {
+    const rows = Math.ceil(count / cols);
+    const byWidth = (width - TILE_GAP * (cols - 1)) / cols;
+    const byHeight = ((height - TILE_GAP * (rows - 1)) / rows - TILE_BAR) * TILE_RATIO;
+    return Math.min(byWidth, byHeight);
+  }
+
   function sizeTiles() {
     const tiles = [...compare.children];
     if (!tiles.length) return;
-    const available = compare.clientHeight;
-    const width = compare.clientWidth;
-    if (!available || !width) return;
+    const width = compare.clientWidth, height = compare.clientHeight;
+    if (!width || !height) return;
 
-    const byHeight = (available - TILE_BAR) * TILE_RATIO;
-    const byWidth = (width - TILE_GAP * (tiles.length - 1)) / tiles.length;
-    const frameWidth = Math.max(120, Math.floor(Math.min(byHeight, byWidth)));
+    let cols = forcedCols && forcedCols <= tiles.length ? forcedCols : 1;
+    if (!forcedCols) {
+      let best = -Infinity;
+      for (let candidate = 1; candidate <= tiles.length; candidate++) {
+        const w = tileWidthFor(candidate, tiles.length, width, height);
+        if (w > best) { best = w; cols = candidate; }
+      }
+    }
+
+    const frameWidth = Math.max(110, Math.floor(tileWidthFor(cols, tiles.length, width, height)));
     const frameHeight = Math.round(frameWidth / TILE_RATIO);
-
+    compare.style.gridTemplateColumns = `repeat(${cols}, ${frameWidth}px)`;
     for (const tile of tiles) {
       tile.style.width = frameWidth + "px";
       const frame = tile.querySelector(".tile-frame");
       if (frame) frame.style.height = frameHeight + "px";
     }
+    paintCols(tiles.length, cols);
   }
+
+  function paintCols(count, activeCols) {
+    const options = ["auto", ...Array.from({length: Math.min(count, 4)}, (_, i) => i + 1)]
+      .filter(o => o === "auto" || o >= 2);
+    if (colsBar.childElementCount !== options.length) {
+      colsBar.replaceChildren(...options.map(option => {
+        const b = document.createElement("button");
+        b.className = "col-opt";
+        b.textContent = option === "auto" ? "Auto" : option;
+        b.title = option === "auto" ? "Fit automatically" : `${option} across`;
+        b.addEventListener("click", () => {
+          forcedCols = option === "auto" ? null : option;
+          try {
+            if (forcedCols) localStorage.setItem("tileCols", forcedCols);
+            else localStorage.removeItem("tileCols");
+          } catch (err) {}
+          sizeTiles();
+        });
+        return b;
+      }));
+    }
+    for (const b of colsBar.children) {
+      const isAuto = b.textContent === "Auto";
+      b.setAttribute("aria-pressed",
+        String(isAuto ? forcedCols === null : Number(b.textContent) === forcedCols));
+    }
+  }
+
   if (window.ResizeObserver) new ResizeObserver(sizeTiles).observe(compare);
   window.addEventListener("resize", sizeTiles);
 
