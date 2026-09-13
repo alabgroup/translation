@@ -142,7 +142,11 @@ Settings live in `config.py`:
 - `SILENCE_RMS`, `SILENCE_SECONDS` — how a pause is detected. Raise `SILENCE_RMS`
   in a noisy room if subtitles never finalize.
 - `MAX_UTTERANCE_SECONDS` — force a cut for a speaker who does not pause.
-- `WRITE_SRT` — write `.srt` transcripts to `output/`.
+- `WRITE_SRT` — write transcripts to `output/<run timestamp>/`. Each run writes
+  `<language>.srt` (timed cues), `<language>.txt` (one utterance per line), and
+  `transcript.jsonl` — one JSON object per utterance carrying the source, every
+  translation and the timings together. Score against the JSONL; the `.txt`
+  files lose the alignment between a line and its translations.
 - `HALLUCINATION_PHRASES`, `MAX_NO_SPEECH_PROB`, `MIN_AVG_LOGPROB` — Whisper
   invents stock phrases ("Thank you.", "You") when handed silence. Unfiltered
   these also reset the overlay's clear timer, so subtitles never blank.

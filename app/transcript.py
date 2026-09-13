@@ -1,5 +1,6 @@
 """Shared in-memory state plus .srt transcript files."""
 
+import json
 import threading
 import time
 from datetime import datetime
@@ -64,6 +65,33 @@ def _write_srt(name, text, start, end):
         srt.write(f"{_srt_index}\n{_srt_timestamp(start)} --> {_srt_timestamp(end)}\n{text}\n\n")
 
 
+def _write_txt(name, text):
+    """One utterance per line, for diffing and scoring later."""
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    with open(OUTPUT_DIR / f"{name}.txt", "a", encoding="utf-8") as plain:
+        plain.write(text.replace("\n", " ").strip() + "\n")
+
+
+def _write_jsonl(source_text, translations, start, end):
+    """Every utterance as one JSON object: source, all translations, timings.
+
+    This is the file to score against - the .txt files lose the alignment
+    between a line and its translations.
+    """
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+    record = {
+        "index": _srt_index,
+        "wall_time": datetime.now().isoformat(timespec="seconds"),
+        "start": round(start, 3),
+        "end": round(end, 3),
+        "duration": round(end - start, 3),
+        "source": source_text,
+        "translations": translations,
+    }
+    with open(OUTPUT_DIR / "transcript.jsonl", "a", encoding="utf-8") as out:
+        out.write(json.dumps(record, ensure_ascii=False) + "\n")
+
+
 def add_line(source_text, translations, start, end):
     """Record one transcribed utterance and its translations.
 
@@ -91,8 +119,11 @@ def add_line(source_text, translations, start, end):
 
         if config.WRITE_SRT:
             _write_srt(config.SOURCE_LANG, source_text, start, end)
+            _write_txt(config.SOURCE_LANG, source_text)
             for name, text in translations.items():
                 _write_srt(name, text, start, end)
+                _write_txt(name, text)
+            _write_jsonl(source_text, translations, start, end)
             _srt_index += 1
 
 

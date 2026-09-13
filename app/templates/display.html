@@ -25,12 +25,18 @@
 {% endif %}
   /* Left half of the canvas, full height. Newest line sits at the bottom and
      older lines stack upward, so the reader's eye stays in one place. */
-  #subtitles {
+  #panel {
     position: absolute;
     left: 0;
     top: 0;
     width: 50vw;
     height: 100vh;
+    background: #000;
+    overflow: hidden;
+  }
+  #subtitles {
+    position: absolute;
+    inset: 0;
     box-sizing: border-box;
     padding: 3vh 2vw;
     display: flex;
@@ -39,7 +45,10 @@
     align-items: flex-start;
     gap: 0.35em;
     overflow: hidden;
-    background: #000;
+    /* Fade the topmost line into the panel over roughly one line, so lines
+       dissolve as they age out instead of ending on a hard edge. */
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1.5em);
+    mask-image: linear-gradient(to bottom, transparent 0, #000 1.5em);
     /* CJK faces follow Lora so Chinese renders with real glyphs - Lora has no
        Chinese coverage and would otherwise fall back to boxes. Songti is the
        serif companion to Lora on macOS; PingFang is the sans fallback. */
@@ -85,7 +94,7 @@
     <select id="language-select"></select>
   </label>
 </div>
-<div id="subtitles"></div>
+<div id="panel"><div id="subtitles"></div></div>
 <script>
   // "active" means follow whatever the control page selected.
   const PINNED = {{ language | tojson }};
