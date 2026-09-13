@@ -108,5 +108,9 @@ silence threshold. Raise `SILENCE_RMS` in `config.py`.
 
 **Too slow.** Use a smaller `WHISPER_MODEL` (`base` or `tiny`).
 
+**First-run model download hangs at 0 bytes.** HuggingFace's Xet backend can stall
+without an error. `app/transcribe.py` sets `HF_HUB_DISABLE_XET=1` to avoid it; if you
+fetch models by hand, set that variable too.
+
 **Microphone permission.** macOS prompts on first run. If it never prompts, enable
 the terminal app under System Settings → Privacy & Security → Microphone.

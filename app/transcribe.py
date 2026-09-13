@@ -1,5 +1,12 @@
 """Speech-to-text using faster-whisper, running locally on the CPU."""
 
+import os
+
+# HuggingFace's Xet download backend can hang at zero bytes on first fetch.
+# Force the plain HTTP downloader, which is reliable here. Must be set before
+# faster_whisper imports huggingface_hub.
+os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
+
 from faster_whisper import WhisperModel
 
 import config
