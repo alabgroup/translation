@@ -25,13 +25,18 @@ def index():
         languages=transcript.languages(),
         port=config.PORT,
         model=config.WHISPER_MODEL,
+        app_name=config.APP_NAME,
+        tagline=config.APP_TAGLINE,
+        colors={name: config.LANGUAGE_COLORS.get(name, config.LANGUAGE_COLOR_FALLBACK)
+                for name in transcript.languages()},
     )
 
 
 @app.route("/display/active")
 def display_active():
     """Overlay that follows whichever language the control page selected."""
-    return render_template("display.html", language="active")
+    return render_template("display.html", language="active",
+                           preview=request.args.get("preview") == "1")
 
 
 @app.route("/display/<language>")
@@ -40,7 +45,8 @@ def display(language):
     match = next((n for n in transcript.languages() if n.lower() == language.lower()), None)
     if match is None:
         abort(404, f"Unknown language {language!r}. Available: {', '.join(transcript.languages())}")
-    return render_template("display.html", language=match)
+    return render_template("display.html", language=match,
+                           preview=request.args.get("preview") == "1")
 
 
 @app.route("/api/lines")

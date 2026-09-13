@@ -5,14 +5,24 @@
 <title>{{ language }} subtitles</title>
 <link href="/static/fonts/lato.css" rel="stylesheet">
 <style>
-  /* The page itself stays transparent so the right half of the canvas shows
-     the video feed. Only the subtitle panel paints a background. */
+  /* The page stays transparent so the right half of the canvas shows the
+     video feed in OBS. Only the subtitle panel paints a background. */
   html, body {
     margin: 0;
     height: 100%;
     background: transparent;
     overflow: hidden;
   }
+{% if preview %}
+  /* Loaded in the control page's preview pane. A transparent document inside
+     an iframe renders as white, so stand in for the video with a soft dark
+     wash - never sent to OBS. */
+  html, body {
+    background:
+      radial-gradient(120% 90% at 78% 18%, #23252b 0%, transparent 60%),
+      linear-gradient(160deg, #17181c 0%, #0e0f12 100%);
+  }
+{% endif %}
   /* Left half of the canvas, full height. Newest line sits at the bottom and
      older lines stack upward, so the reader's eye stays in one place. */
   #subtitles {

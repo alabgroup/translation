@@ -66,6 +66,21 @@ TRANSLATION_FIXES = {
     "Spanish": [(r"\bAmen\b", "Amén")],
 }
 
+# --- Branding ---
+# Shown on the control page. Acts 2: everyone heard in their own language.
+APP_NAME = "Pentecost"
+APP_TAGLINE = "live translation"
+
+# Colorway per language, used for the accent wash on the control page.
+# Muted, desaturated tones - they tint the interface, never shout.
+LANGUAGE_COLORS = {
+    "Source":     "#8E9AAF",   # Granite
+    "Portuguese": "#E8875A",   # Sorrento Tangerine
+    "Spanish":    "#A896E8",   # Luberon Lavender
+    "Chinese":    "#5FB79A",   # Eucalyptus
+}
+LANGUAGE_COLOR_FALLBACK = "#8E9AAF"
+
 # --- Server ---
 HOST = "0.0.0.0"
 PORT = 8000

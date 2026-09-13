@@ -3,27 +3,32 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Live translation</title>
+<title>{{ app_name }} — {{ tagline }}</title>
 <style>
+  /* The accent is a real animatable colour, so the interface eases between
+     colourways when the operator changes language rather than snapping. */
+  @property --accent {
+    syntax: '<color>'; inherits: true; initial-value: #E8875A;
+  }
+
   :root {
     color-scheme: dark;
-    /* Grounded in the platform dark palette: near-black canvas, raised
-       surfaces, hairline separators rather than drawn borders. */
-    --canvas:      #000000;
-    --surface:     #1c1c1e;
-    --surface-2:   #2c2c2e;
-    --surface-3:   #3a3a3c;
-    --separator:   rgba(84, 84, 88, 0.55);
-    --label:       #f5f5f7;
-    --label-2:     #a1a1a6;
-    --label-3:     #6e6e73;
-    --blue:        #0a84ff;
-    --green:       #30d158;
-    --orange:      #ff9f0a;
-    --red:         #ff453a;
-    --radius-lg: 14px;
-    --radius:    10px;
-    --radius-sm:  7px;
+    --canvas:      #0c0d10;
+    --surface:     #16181c;
+    --surface-2:   #1e2126;
+    --surface-3:   #2a2e35;
+    --separator:   rgba(140, 150, 168, 0.16);
+    --label:       #f2f3f5;
+    --label-2:     #a3a9b5;
+    --label-3:     #6b7280;
+    --green:       #5FB79A;
+    --amber:       #E8B85A;
+    --red:         #E86A5A;
+    --radius-lg: 16px;
+    --radius:    11px;
+    --radius-sm:  8px;
+    --accent: #E8875A;
+    transition: --accent 700ms cubic-bezier(0.32, 0.72, 0, 1);
   }
   * { box-sizing: border-box; }
   html, body { height: 100%; }
@@ -37,238 +42,260 @@
     -webkit-font-smoothing: antialiased;
     font-variant-numeric: tabular-nums;
     display: grid;
-    /* --left is moved by dragging the divider; see the splitter script. */
     grid-template-columns: var(--left, 380px) 1px 1fr;
   }
 
   /* ---- Structure ---- */
+  /* A single soft wash bleeds the active colourway into the top of each
+     column. Low alpha: it should read as light, not as a coloured panel. */
   #controls {
-    padding: 22px 20px 40px;
+    position: relative;
+    padding: 26px 22px 44px;
     overflow-y: auto;
-    background: var(--canvas);
+    background:
+      radial-gradient(125% 55% at 12% -8%,
+        color-mix(in oklab, var(--accent) 20%, transparent) 0%, transparent 62%),
+      var(--canvas);
+  }
+  #stage {
+    position: relative;
+    padding: 26px 26px 26px;
+    display: flex; flex-direction: column; min-width: 0; gap: 16px;
+    background:
+      radial-gradient(90% 42% at 88% -6%,
+        color-mix(in oklab, var(--accent) 13%, transparent) 0%, transparent 58%),
+      var(--canvas);
   }
 
-  /* Divider: a hairline with a wider invisible grab area, so it is easy to
-     hit without drawing a thick rule. */
-  #divider {
-    position: relative;
-    background: var(--separator);
-    cursor: col-resize;
-    touch-action: none;
-  }
-  #divider::before {
-    content: ""; position: absolute; inset: 0 -5px; z-index: 2;
-  }
+  #divider { position: relative; background: var(--separator);
+             cursor: col-resize; touch-action: none; }
+  #divider::before { content: ""; position: absolute; inset: 0 -5px; z-index: 4; }
   #divider::after {
     content: ""; position: absolute; top: 50%; left: -1px;
-    width: 3px; height: 36px; margin-top: -18px; border-radius: 2px;
+    width: 3px; height: 38px; margin-top: -19px; border-radius: 2px;
     background: var(--surface-3); opacity: 0; transition: opacity 140ms ease;
   }
   #divider:hover::after, #divider.dragging::after { opacity: 1; }
-  #divider.dragging { background: var(--blue); }
+  #divider.dragging { background: var(--accent); }
   body.resizing { cursor: col-resize; user-select: none; }
-  body.resizing #preview { pointer-events: none; }   /* keep drags out of the iframe */
-  #stage {
-    padding: 22px 24px 24px;
-    display: flex;
-    flex-direction: column;
-    min-width: 0;
-    gap: 14px;
-  }
+  body.resizing #preview { pointer-events: none; }
 
-  header { margin-bottom: 22px; }
+  /* ---- Wordmark ---- */
+  header { margin-bottom: 26px; }
+  .mark { display: flex; align-items: center; gap: 9px; }
+  .glyph {
+    width: 22px; height: 22px; border-radius: 7px; flex: none;
+    background: linear-gradient(145deg,
+      color-mix(in oklab, var(--accent) 92%, white 18%) 0%,
+      color-mix(in oklab, var(--accent) 78%, black 22%) 100%);
+    box-shadow: 0 2px 10px color-mix(in oklab, var(--accent) 38%, transparent);
+    position: relative;
+  }
+  /* Three descending strokes: one utterance becoming many tongues. */
+  .glyph::after {
+    content: ""; position: absolute; inset: 0;
+    background:
+      linear-gradient(#fff, #fff) 6px 6px / 10px 1.5px no-repeat,
+      linear-gradient(#fff, #fff) 6px 10px / 7px 1.5px no-repeat,
+      linear-gradient(#fff, #fff) 6px 14px / 4px 1.5px no-repeat;
+    opacity: 0.92; border-radius: inherit;
+  }
   h1 {
-    font-size: 19px; font-weight: 600; letter-spacing: -0.022em;
-    margin: 0 0 3px;
+    font-size: 18px; font-weight: 620; letter-spacing: -0.024em; margin: 0;
+    background: linear-gradient(100deg, var(--label) 20%,
+      color-mix(in oklab, var(--accent) 62%, var(--label)) 100%);
+    -webkit-background-clip: text; background-clip: text; color: transparent;
   }
-  .sub { color: var(--label-3); font-size: 12px; margin: 0; letter-spacing: -0.005em; }
+  .sub {
+    color: var(--label-3); font-size: 11.5px; margin: 4px 0 0 31px;
+    letter-spacing: 0.02em;
+  }
 
-  .section { margin-top: 24px; }
+  .section { margin-top: 26px; }
   .section:first-of-type { margin-top: 0; }
   .section-title {
-    font-size: 11px; font-weight: 590; text-transform: uppercase;
-    letter-spacing: 0.05em; color: var(--label-3);
-    margin: 0 0 9px 2px;
+    font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--label-3); margin: 0 0 10px 2px;
   }
 
   .card {
     background: var(--surface);
+    border: 0.5px solid var(--separator);
     border-radius: var(--radius-lg);
-    padding: 14px;
+    padding: 15px;
   }
-  .card + .card { margin-top: 10px; }
 
   /* ---- Segmented control ---- */
-  #languages {
-    display: flex; gap: 2px; padding: 2px;
-    background: var(--surface-2); border-radius: 9px;
-  }
+  #languages { display: flex; gap: 3px; padding: 3px;
+               background: var(--surface-2); border-radius: 11px; }
   .seg {
-    flex: 1; font: inherit; font-size: 12.5px; font-weight: 510;
-    letter-spacing: -0.01em;
-    padding: 6px 4px; border: 0; border-radius: 7px; cursor: pointer;
-    background: transparent; color: var(--label-2);
-    transition: background 140ms ease, color 140ms ease;
+    flex: 1; font: inherit; font-size: 12.5px; font-weight: 520;
+    letter-spacing: -0.01em; padding: 7px 4px; border: 0; border-radius: 8px;
+    cursor: pointer; background: transparent; color: var(--label-2);
+    transition: background 200ms ease, color 200ms ease, box-shadow 200ms ease;
     white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
   }
   .seg:hover { color: var(--label); }
   .seg[aria-pressed="true"] {
-    background: var(--surface-3); color: var(--label); font-weight: 600;
-    box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.06);
+    color: #fff; font-weight: 600;
+    background: linear-gradient(145deg,
+      color-mix(in oklab, var(--seg) 88%, white 14%) 0%,
+      color-mix(in oklab, var(--seg) 88%, black 14%) 100%);
+    box-shadow: 0 2px 10px color-mix(in oklab, var(--seg) 34%, transparent);
   }
 
   /* ---- Rows ---- */
   .row { display: flex; align-items: center; gap: 10px; }
-  .row + .row { margin-top: 12px; }
+  .row + .row { margin-top: 13px; }
   .row-label { font-size: 13px; color: var(--label); flex: 1; }
 
   select {
     font: inherit; font-size: 12.5px; flex: 1; min-width: 0;
-    padding: 7px 9px; color: var(--label);
-    background: var(--surface-2);
+    padding: 8px 28px 8px 10px; color: var(--label);
+    background-color: var(--surface-2);
     border: 0.5px solid var(--separator); border-radius: var(--radius-sm);
     appearance: none;
     background-image:
       linear-gradient(45deg, transparent 50%, var(--label-2) 50%),
       linear-gradient(135deg, var(--label-2) 50%, transparent 50%);
-    background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
-    background-size: 5px 5px, 5px 5px;
-    background-repeat: no-repeat;
-    padding-right: 28px;
+    background-position: calc(100% - 15px) 53%, calc(100% - 10px) 53%;
+    background-size: 5px 5px, 5px 5px; background-repeat: no-repeat;
   }
-  select:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
+  select:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
 
   /* ---- Switch ---- */
   .switch {
     position: relative; width: 44px; height: 26px; flex: none;
     border: 0; border-radius: 999px; cursor: pointer; padding: 0;
-    background: var(--surface-3);
-    transition: background 200ms ease;
+    background: var(--surface-3); transition: background 240ms ease;
   }
   .switch::after {
     content: ""; position: absolute; top: 2px; left: 2px;
     width: 22px; height: 22px; border-radius: 50%; background: #fff;
-    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
-    transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
+    box-shadow: 0 2px 5px rgba(0,0,0,0.45);
+    transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
   }
-  .switch[aria-pressed="true"] { background: var(--red); }
+  .switch[aria-pressed="true"] {
+    background: linear-gradient(145deg,
+      color-mix(in oklab, var(--red) 90%, white 12%), var(--red));
+  }
   .switch[aria-pressed="true"]::after { transform: translateX(18px); }
 
   /* ---- Meter ---- */
-  .meter-row { display: flex; align-items: center; gap: 10px; }
-  #meter {
-    position: relative; flex: 1; height: 6px; border-radius: 3px;
-    background: var(--surface-2); overflow: hidden;
-  }
+  .meter-row { display: flex; align-items: center; gap: 11px; }
+  #meter { position: relative; flex: 1; height: 6px; border-radius: 3px;
+           background: var(--surface-2); overflow: hidden; }
+  /* The gradient lives on a full-width track that is masked by the fill, so
+     colour reflects absolute level rather than stretching with it. */
   #meter-fill {
-    position: absolute; inset: 0 auto 0 0; width: 0%;
-    border-radius: 3px; background: var(--green);
-    transition: width 90ms linear, background 200ms ease;
+    position: absolute; inset: 0; border-radius: 3px;
+    background: linear-gradient(90deg,
+      var(--green) 0%, var(--green) 58%, var(--amber) 80%, var(--red) 100%);
+    clip-path: inset(0 100% 0 0);
+    transition: clip-path 90ms linear, filter 300ms ease;
   }
-  #meter-fill.hot  { background: var(--orange); }
-  #meter-fill.clip { background: var(--red); }
-  #meter.muted #meter-fill { background: var(--label-3); }
-  .meter-label {
-    font-size: 11px; color: var(--label-3); width: 52px; text-align: right;
-  }
-  .note { font-size: 11.5px; color: var(--label-3); margin-top: 10px; line-height: 1.45; }
-  .note.warn { color: var(--orange); }
+  #meter.muted #meter-fill { filter: grayscale(1) brightness(0.55); }
+  .meter-label { font-size: 11px; color: var(--label-3); width: 52px; text-align: right; }
+  .note { font-size: 11.5px; color: var(--label-3); margin-top: 11px; line-height: 1.45; }
+  .note.warn { color: var(--amber); }
 
   /* ---- Sliders ---- */
-  .tune + .tune { margin-top: 15px; }
+  .tune + .tune { margin-top: 16px; }
   .tune-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
   .tune-label { font-size: 12.5px; color: var(--label); letter-spacing: -0.008em; }
-  .tune-value { font-size: 11.5px; color: var(--label-2); white-space: nowrap; }
-  .tune-help { font-size: 11px; color: var(--label-3); margin-top: 3px; line-height: 1.4; }
+  .tune-value {
+    font-size: 11.5px; white-space: nowrap;
+    color: color-mix(in oklab, var(--accent) 70%, var(--label));
+  }
+  .tune-help { font-size: 11px; color: var(--label-3); margin-top: 4px; line-height: 1.4; }
   input[type=range] {
-    width: 100%; margin: 7px 0 0; height: 4px; appearance: none;
-    background: var(--surface-2); border-radius: 2px; cursor: pointer;
+    width: 100%; margin: 8px 0 0; height: 4px; appearance: none;
+    border-radius: 2px; cursor: pointer;
+    background: linear-gradient(90deg,
+      color-mix(in oklab, var(--accent) 55%, transparent), var(--surface-3));
   }
   input[type=range]::-webkit-slider-thumb {
     appearance: none; width: 15px; height: 15px; border-radius: 50%;
-    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+    background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.55);
   }
-  input[type=range]:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+  input[type=range]:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
 
   .btn {
-    font: inherit; font-size: 12.5px; font-weight: 510;
-    padding: 7px 13px; cursor: pointer;
-    border: 0.5px solid var(--separator); border-radius: var(--radius-sm);
-    background: var(--surface-2); color: var(--label);
-    transition: background 140ms ease;
+    font: inherit; font-size: 12.5px; font-weight: 520; padding: 8px 14px;
+    cursor: pointer; border: 0.5px solid var(--separator);
+    border-radius: var(--radius-sm); background: var(--surface-2);
+    color: var(--label); transition: background 160ms ease, border-color 160ms ease;
   }
-  .btn:hover { background: var(--surface-3); }
-  #reset { margin-top: 16px; width: 100%; }
+  .btn:hover { background: var(--surface-3);
+               border-color: color-mix(in oklab, var(--accent) 40%, transparent); }
+  #reset { margin-top: 17px; width: 100%; }
 
-  /* ---- OBS URL ---- */
   .url-row { display: flex; align-items: center; gap: 8px; }
   .url {
     flex: 1; min-width: 0; font-size: 11.5px;
     font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
     color: var(--label-2); background: var(--surface-2);
-    padding: 7px 9px; border-radius: var(--radius-sm);
+    padding: 8px 10px; border-radius: var(--radius-sm);
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
 
   /* ---- Stage ---- */
   .stage-head { display: flex; align-items: center; justify-content: space-between; }
-  .live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--label-3); }
-  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--label-3); }
-  .dot.on { background: var(--green); animation: pulse 2s ease-in-out infinite; }
-  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+  .live { display: flex; align-items: center; gap: 7px; font-size: 11px; color: var(--label-3); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--label-3);
+         transition: background 300ms ease, box-shadow 300ms ease; }
+  .dot.on {
+    background: var(--green);
+    box-shadow: 0 0 0 3px color-mix(in oklab, var(--green) 22%, transparent);
+    animation: pulse 2.2s ease-in-out infinite;
+  }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-  /* Width follows the divider. The height cap keeps the transcript visible
-     when the pane is dragged wide. */
   #preview-wrap {
     position: relative; width: 100%;
     max-width: calc((100vh - 300px) * 16 / 9);
     aspect-ratio: 16 / 9;
     border-radius: var(--radius); overflow: hidden;
-    background: #000;
-    box-shadow: 0 0 0 0.5px var(--separator), 0 12px 32px rgba(0,0,0,0.55);
+    background: #0e0f12;
+    box-shadow:
+      0 0 0 0.5px var(--separator),
+      0 18px 44px rgba(0,0,0,0.6),
+      0 0 60px -18px color-mix(in oklab, var(--accent) 40%, transparent);
+    transition: box-shadow 700ms cubic-bezier(0.32, 0.72, 0, 1);
   }
-  /* The overlay document is transparent, and a transparent iframe document
-     still paints the browser's default white canvas underneath. */
-  #preview {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    border: 0; background: #000; color-scheme: dark;
-  }
+  #preview { position: absolute; inset: 0; width: 100%; height: 100%;
+             border: 0; background: #0e0f12; color-scheme: dark; }
 
   #feed {
     flex: 1; min-height: 140px; overflow-y: auto;
-    background: var(--surface); border-radius: var(--radius-lg);
-    padding: 4px 16px;
+    background: var(--surface); border: 0.5px solid var(--separator);
+    border-radius: var(--radius-lg); padding: 4px 17px;
   }
-  .entry { padding: 12px 0; border-bottom: 0.5px solid var(--separator); }
+  .entry { padding: 13px 0; border-bottom: 0.5px solid var(--separator); }
   .entry:last-child { border-bottom: 0; }
   .stamp { color: var(--label-3); font-size: 10.5px; letter-spacing: 0.02em; }
-  .src { font-size: 14px; font-weight: 590; letter-spacing: -0.012em; margin-top: 2px; }
-  .tr { color: var(--label-2); font-size: 13px; margin-top: 3px; }
+  .src { font-size: 14px; font-weight: 600; letter-spacing: -0.012em; margin-top: 3px; }
+  .tr { color: var(--label-2); font-size: 13px; margin-top: 4px; }
   .tr.live { color: var(--label); }
   .tr .tag {
-    color: var(--label-3); font-size: 10.5px; text-transform: uppercase;
-    letter-spacing: 0.05em; margin-right: 6px;
+    font-size: 10px; text-transform: uppercase; letter-spacing: 0.06em;
+    margin-right: 7px; color: var(--label-3);
   }
-  .tr.live .tag { color: var(--blue); }
-  .empty {
-    color: var(--label-3); font-size: 13px;
-    display: flex; align-items: center; justify-content: center; height: 100%;
-    min-height: 120px;
-  }
+  .tr.live .tag { color: var(--tag, var(--accent)); font-weight: 600; }
+  .empty { color: var(--label-3); font-size: 13px; display: flex;
+           align-items: center; justify-content: center; height: 100%; min-height: 120px; }
 
-  ::-webkit-scrollbar { width: 9px; }
-  ::-webkit-scrollbar-thumb {
-    background: var(--surface-3); border-radius: 5px;
-    border: 2px solid var(--canvas);
-  }
+  ::-webkit-scrollbar { width: 10px; }
+  ::-webkit-scrollbar-thumb { background: var(--surface-3); border-radius: 5px;
+                              border: 3px solid transparent; background-clip: content-box; }
   ::-webkit-scrollbar-track { background: transparent; }
 </style>
 </head>
 <body>
   <div id="controls">
     <header>
-      <h1>Live translation</h1>
-      <p class="sub">Whisper {{ model }} &middot; Argos &middot; port {{ port }}</p>
+      <div class="mark"><span class="glyph"></span><h1>{{ app_name }}</h1></div>
+      <p class="sub">{{ tagline }} · whisper {{ model }} · port {{ port }}</p>
     </header>
 
     <div class="section">
@@ -322,12 +349,14 @@
       <span class="live"><span class="dot" id="live-dot"></span><span id="live-text">idle</span></span>
     </div>
     <div id="preview-wrap">
-      <iframe id="preview" src="/display/active" title="Overlay preview"></iframe>
+      <!-- preview=1 paints a backdrop; OBS loads the URL without it and stays transparent. -->
+      <iframe id="preview" src="/display/active?preview=1" title="Overlay preview"></iframe>
     </div>
     <div id="feed"><div class="empty">Waiting for speech…</div></div>
   </div>
 
 <script>
+  const COLORS = {{ colors | tojson }};
   const feed = document.getElementById("feed");
   const languageBar = document.getElementById("languages");
   const deviceSelect = document.getElementById("device");
@@ -342,6 +371,8 @@
   let lastRevision = -1, knownLanguages = [], active = null;
   let knownDevices = [], muted = false, quietSince = null;
 
+  function colorFor(name) { return COLORS[name] || "#8E9AAF"; }
+
   // ---- Language ----
   async function setActive(language) {
     active = language; paintSegments();
@@ -352,8 +383,13 @@
     } catch (err) {}
   }
   function paintSegments() {
-    for (const b of languageBar.children)
-      b.setAttribute("aria-pressed", String(b.dataset.language === active));
+    // Whole interface eases to the active language's colourway.
+    document.documentElement.style.setProperty("--accent", colorFor(active));
+    for (const b of languageBar.children) {
+      const on = b.dataset.language === active;
+      b.setAttribute("aria-pressed", String(on));
+      b.style.setProperty("--seg", colorFor(b.dataset.language));
+    }
   }
   function syncSegments(languages) {
     if (languages.join("|") !== knownLanguages.join("|")) {
@@ -374,7 +410,6 @@
     audioNote.textContent = text || "";
     audioNote.className = warn ? "note warn" : "note";
   }
-
   deviceSelect.addEventListener("change", async () => {
     setNote("Switching input…", false);
     try {
@@ -384,7 +419,6 @@
       setNote(res.ok ? "" : ((await res.json()).error || "Could not switch input"), !res.ok);
     } catch (err) { setNote("Could not reach the server", true); }
   });
-
   muteBtn.addEventListener("click", async () => {
     muted = !muted; paintMute();
     try {
@@ -397,24 +431,20 @@
     muteBtn.setAttribute("aria-pressed", String(muted));
     meter.classList.toggle("muted", muted);
   }
-
   function syncDevices(devices, current) {
     const names = devices.map(d => d.name);
     if (names.join("|") !== knownDevices.join("|")) {
       knownDevices = names;
       deviceSelect.replaceChildren(...devices.map(d => {
         const o = document.createElement("option");
-        o.value = d.name;
-        o.textContent = `${d.name} · ${d.channels} ch`;
+        o.value = d.name; o.textContent = `${d.name} · ${d.channels} ch`;
         return o;
       }));
     }
-    // Match on substring: the configured value may be a partial name.
     const match = names.find(n => current &&
       n.toLowerCase().includes(String(current).toLowerCase()));
     if (document.activeElement !== deviceSelect && match) deviceSelect.value = match;
   }
-
   async function pollAudio() {
     try {
       const res = await fetch("/api/audio", {cache: "no-store"});
@@ -422,11 +452,9 @@
       syncDevices(data.devices || [], data.device);
       if (data.muted !== muted) { muted = data.muted; paintMute(); }
 
-      // RMS is tiny for speech; sqrt maps it onto a readable bar.
       const level = data.level || 0;
       const pct = Math.min(100, Math.round(Math.sqrt(level) * 320));
-      meterFill.style.width = pct + "%";
-      meterFill.className = pct > 92 ? "clip" : pct > 70 ? "hot" : "";
+      meterFill.style.clipPath = `inset(0 ${100 - pct}% 0 0)`;
       meterLabel.textContent = level > 0.0001
         ? `${(20 * Math.log10(level)).toFixed(0)} dB` : "silent";
 
@@ -448,27 +476,19 @@
   // ---- Tuning ----
   const tuning = document.getElementById("tuning");
   let defaults = null;
-
   function buildTuning(spec) {
     if (defaults === null)
       defaults = Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, v.value]));
     tuning.replaceChildren(...Object.entries(spec).map(([name, s]) => {
-      const wrap = document.createElement("div");
-      wrap.className = "tune";
-
-      const head = document.createElement("div");
-      head.className = "tune-head";
+      const wrap = document.createElement("div"); wrap.className = "tune";
+      const head = document.createElement("div"); head.className = "tune-head";
       const label = document.createElement("span");
       label.className = "tune-label"; label.textContent = s.label;
-      const value = document.createElement("span");
-      value.className = "tune-value";
-      head.append(label, value);
-      wrap.append(head);
+      const value = document.createElement("span"); value.className = "tune-value";
+      head.append(label, value); wrap.append(head);
 
       const input = document.createElement("input");
-      Object.assign(input, {type: "range", min: s.min, max: s.max,
-                            step: s.step, value: s.value});
-      // Decimals inferred from the step, so 0.001 does not render as "0".
+      Object.assign(input, {type: "range", min: s.min, max: s.max, step: s.step, value: s.value});
       const places = (String(s.step).split(".")[1] || "").length;
       const paint = () => value.textContent =
         `${Number(input.value).toFixed(places)}${s.unit ? " " + s.unit : ""}`;
@@ -476,30 +496,24 @@
       input.addEventListener("input", paint);
       input.addEventListener("change", () => send({[name]: input.value}));
       wrap.append(input);
-
       if (s.help) {
         const help = document.createElement("div");
-        help.className = "tune-help"; help.textContent = s.help;
-        wrap.append(help);
+        help.className = "tune-help"; help.textContent = s.help; wrap.append(help);
       }
       return wrap;
     }));
   }
-
   async function send(changes) {
     try {
       await fetch("/api/settings", {method: "POST",
-        headers: {"Content-Type": "application/json"},
-        body: JSON.stringify(changes)});
+        headers: {"Content-Type": "application/json"}, body: JSON.stringify(changes)});
     } catch (err) {}
   }
-
   document.getElementById("reset").addEventListener("click", async () => {
     if (!defaults) return;
     await send(defaults);
     buildTuning(await (await fetch("/api/settings", {cache: "no-store"})).json());
   });
-
   async function loadTuning() {
     try {
       const spec = await (await fetch("/api/settings", {cache: "no-store"})).json();
@@ -525,8 +539,7 @@
       return;
     }
     feed.replaceChildren(...lines.map(line => {
-      const entry = document.createElement("div");
-      entry.className = "entry";
+      const entry = document.createElement("div"); entry.className = "entry";
       const stamp = document.createElement("div");
       stamp.className = "stamp"; stamp.textContent = line.time;
       const src = document.createElement("div");
@@ -535,6 +548,7 @@
       for (const [name, text] of Object.entries(line.translations || {})) {
         const tr = document.createElement("div");
         tr.className = name === active ? "tr live" : "tr";
+        tr.style.setProperty("--tag", colorFor(name));
         const tag = document.createElement("span");
         tag.className = "tag"; tag.textContent = name;
         tr.append(tag, document.createTextNode(text));
@@ -544,12 +558,11 @@
     }));
     feed.scrollTop = feed.scrollHeight;
   }
-
   async function pollLines() {
     try {
       const res = await fetch("/api/lines", {cache: "no-store"});
       const data = await res.json();
-      if (active === null) active = data.active;
+      if (active === null) { active = data.active; paintSegments(); }
       syncSegments(data.languages || []);
       if (data.revision !== lastRevision) { lastRevision = data.revision; render(data.lines); }
     } catch (err) {}
@@ -558,51 +571,41 @@
   // ---- Splitter ----
   const divider = document.getElementById("divider");
   const MIN_LEFT = 280, MIN_RIGHT = 360;
-
   function setLeft(px) {
     const max = Math.max(MIN_LEFT, window.innerWidth - MIN_RIGHT);
     const width = Math.round(Math.min(Math.max(px, MIN_LEFT), max));
     document.body.style.setProperty("--left", width + "px");
     try { localStorage.setItem("splitLeft", width); } catch (err) {}
   }
-
   try {
     const saved = parseInt(localStorage.getItem("splitLeft"), 10);
     if (saved) setLeft(saved);
   } catch (err) {}
-
   divider.addEventListener("pointerdown", (event) => {
     event.preventDefault();
     divider.setPointerCapture(event.pointerId);
-    divider.classList.add("dragging");
-    document.body.classList.add("resizing");
+    divider.classList.add("dragging"); document.body.classList.add("resizing");
   });
   divider.addEventListener("pointermove", (event) => {
-    if (!divider.hasPointerCapture(event.pointerId)) return;
-    setLeft(event.clientX);
+    if (divider.hasPointerCapture(event.pointerId)) setLeft(event.clientX);
   });
   function endDrag(event) {
     if (divider.hasPointerCapture(event.pointerId))
       divider.releasePointerCapture(event.pointerId);
-    divider.classList.remove("dragging");
-    document.body.classList.remove("resizing");
+    divider.classList.remove("dragging"); document.body.classList.remove("resizing");
   }
   divider.addEventListener("pointerup", endDrag);
   divider.addEventListener("pointercancel", endDrag);
-  // Double-click restores the default split.
   divider.addEventListener("dblclick", () => setLeft(380));
-  // Keyboard nudging, since the divider is focusable.
   divider.addEventListener("keydown", (event) => {
     const step = event.shiftKey ? 40 : 10;
-    const current = parseInt(getComputedStyle(document.body)
-      .getPropertyValue("--left"), 10) || 380;
+    const current = parseInt(getComputedStyle(document.body).getPropertyValue("--left"), 10) || 380;
     if (event.key === "ArrowLeft") { setLeft(current - step); event.preventDefault(); }
     if (event.key === "ArrowRight") { setLeft(current + step); event.preventDefault(); }
   });
   window.addEventListener("resize", () => {
-    const current = parseInt(getComputedStyle(document.body)
-      .getPropertyValue("--left"), 10);
-    if (current) setLeft(current);   // Re-clamp against the new window width.
+    const current = parseInt(getComputedStyle(document.body).getPropertyValue("--left"), 10);
+    if (current) setLeft(current);
   });
 
   paintMute();
