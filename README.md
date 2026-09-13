@@ -143,6 +143,9 @@ Settings live in `config.py`:
   in a noisy room if subtitles never finalize.
 - `MAX_UTTERANCE_SECONDS` — force a cut for a speaker who does not pause.
 - `WRITE_SRT` — write `.srt` transcripts to `output/`.
+- `HALLUCINATION_PHRASES`, `MAX_NO_SPEECH_PROB`, `MIN_AVG_LOGPROB` — Whisper
+  invents stock phrases ("Thank you.", "You") when handed silence. Unfiltered
+  these also reset the overlay's clear timer, so subtitles never blank.
 
 ## Layout
 

@@ -28,6 +28,12 @@ def load_model():
     return _model
 
 
+def _is_hallucination(text):
+    """True if the text is one of Whisper's stock responses to silence."""
+    cleaned = text.strip().lower().strip(" .,!?\u2026\"'")
+    return cleaned in config.HALLUCINATION_PHRASES
+
+
 def transcribe(audio):
     """Transcribe one utterance. Returns stripped text, or '' if nothing was said."""
     segments, _info = load_model().transcribe(
@@ -37,4 +43,20 @@ def transcribe(audio):
         beam_size=1,
         condition_on_previous_text=False,
     )
-    return " ".join(segment.text.strip() for segment in segments).strip()
+
+    kept = []
+    for segment in segments:
+        # Whisper reports how confident it is that a segment contains speech.
+        # Trust that before falling back to matching known phrases.
+        if getattr(segment, "no_speech_prob", 0.0) > config.MAX_NO_SPEECH_PROB:
+            continue
+        if getattr(segment, "avg_logprob", 0.0) < config.MIN_AVG_LOGPROB:
+            continue
+        text = segment.text.strip()
+        if text:
+            kept.append(text)
+
+    joined = " ".join(kept).strip()
+    # A stock phrase is only a hallucination when it is the entire utterance;
+    # "thank you" inside a real sentence is fine.
+    return "" if not joined or _is_hallucination(joined) else joined

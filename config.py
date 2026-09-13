@@ -19,6 +19,21 @@ WHISPER_MODEL = "small"    # tiny | base | small | medium | large-v3
 WHISPER_COMPUTE = "int8"   # int8 is the fast CPU default on Apple silicon.
 SOURCE_LANG = "en"
 
+# --- Hallucination filtering ---
+# Whisper invents stock phrases when handed silence or non-speech noise.
+# Unfiltered they reset the overlay's clear timer, so subtitles never blank.
+MAX_NO_SPEECH_PROB = 0.6     # Reject a segment Whisper itself doubts is speech.
+MIN_AVG_LOGPROB = -1.0       # Reject low-confidence output.
+
+# Exact matches (case- and punctuation-insensitive) that are dropped outright.
+# Only phrases meaningless on their own as a whole utterance belong here.
+HALLUCINATION_PHRASES = {
+    "you", "thank you", "thanks", "thank you very much", "thanks for watching",
+    "thank you for watching", "please subscribe", "bye", "bye bye", "okay",
+    "the end", "subtitles by the amara.org community", "music", "applause",
+    "silence", "beep", "blank_audio",
+}
+
 # --- Translation ---
 # Display name -> target language code, used by the translator and the display page.
 # Names are used in the overlay URLs (/display/spanish), so keep them URL-friendly.
