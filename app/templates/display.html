@@ -114,6 +114,15 @@
       return div;
     }).filter(div => div.textContent);
     container.replaceChildren(...nodes);
+
+    // The panel is bottom-anchored with overflow hidden, so anything taller
+    // than the canvas gets sliced through the middle of the oldest line.
+    // Drop whole lines from the top until what remains fits, keeping the
+    // newest line even if it alone overflows.
+    while (container.scrollHeight > container.clientHeight
+           && container.childElementCount > 1) {
+      container.removeChild(container.firstElementChild);
+    }
   }
 
   function syncPicker(languages, active) {

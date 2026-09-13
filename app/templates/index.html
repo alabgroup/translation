@@ -245,16 +245,16 @@
   /* One tile per language, side by side. Each is cropped to the subtitle
      panel - the left half of the canvas - since the right half is always
      transparent video and shows nothing worth the space. */
+  /* Tiles are sized in script: each frame keeps an exact 8:9 - the left half
+     of a 16:9 canvas - while the row grows to fill whatever height is left. */
   #compare {
-    display: grid; gap: 14px; overflow-y: auto; align-content: start;
-    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
-    flex: 0 0 auto;
+    display: flex; gap: 14px; flex: 1 1 auto; min-height: 0;
+    align-items: flex-start; justify-content: flex-start;
   }
   .tile { position: relative; cursor: pointer; border: 0; padding: 0;
-          background: none; text-align: left; }
+          background: none; text-align: left; flex: none; }
   .tile-frame {
-    position: relative; width: 100%;
-    aspect-ratio: 8 / 9;            /* the left half of a 16:9 canvas */
+    position: relative; width: 100%; height: 0;   /* height set in script */
     border-radius: var(--radius); overflow: hidden; background: #000;
     box-shadow: 0 0 0 0.5px var(--separator), 0 10px 26px rgba(0,0,0,0.5);
     transition: box-shadow 300ms ease, transform 300ms ease;
@@ -281,7 +281,7 @@
   /* Feed */
   #feed-wrap {
     position: relative; display: flex;
-    flex: 1 1 auto; min-height: 110px; max-height: 28vh;
+    flex: 0 0 auto; height: 26vh; min-height: 110px;
   }
   #jump {
     position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
@@ -704,7 +704,32 @@
       return tile;
     }));
     paintTiles();
+    sizeTiles();
   }
+
+  // Give every frame an exact 8:9 box, as large as the row allows. Prefer
+  // filling the available height; fall back to width when the row is narrow.
+  const TILE_GAP = 14, TILE_BAR = 30, TILE_RATIO = 8 / 9;
+  function sizeTiles() {
+    const tiles = [...compare.children];
+    if (!tiles.length) return;
+    const available = compare.clientHeight;
+    const width = compare.clientWidth;
+    if (!available || !width) return;
+
+    const byHeight = (available - TILE_BAR) * TILE_RATIO;
+    const byWidth = (width - TILE_GAP * (tiles.length - 1)) / tiles.length;
+    const frameWidth = Math.max(120, Math.floor(Math.min(byHeight, byWidth)));
+    const frameHeight = Math.round(frameWidth / TILE_RATIO);
+
+    for (const tile of tiles) {
+      tile.style.width = frameWidth + "px";
+      const frame = tile.querySelector(".tile-frame");
+      if (frame) frame.style.height = frameHeight + "px";
+    }
+  }
+  if (window.ResizeObserver) new ResizeObserver(sizeTiles).observe(compare);
+  window.addEventListener("resize", sizeTiles);
 
   function paintTiles() {
     for (const tile of compare.children) {
