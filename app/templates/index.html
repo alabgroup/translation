@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Live translation</title>
+<style>
+  :root { color-scheme: light dark; }
+  body {
+    margin: 0;
+    padding: 2rem 1.5rem 3rem;
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    max-width: 52rem;
+    margin-inline: auto;
+  }
+  h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
+  .sub { color: #6b7280; margin: 0 0 2rem; }
+  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; margin: 2rem 0 0.6rem; }
+  a { color: #2563eb; }
+  ul { margin: 0; padding-left: 1.1rem; }
+  li { margin-bottom: 0.35rem; }
+  code { background: rgba(127,127,127,0.14); padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.9em; }
+  #feed {
+    border: 1px solid rgba(127,127,127,0.3);
+    border-radius: 8px;
+    padding: 1rem;
+    min-height: 6rem;
+    max-height: 26rem;
+    overflow-y: auto;
+  }
+  .entry { padding: 0.55rem 0; border-bottom: 1px solid rgba(127,127,127,0.16); }
+  .entry:last-child { border-bottom: 0; }
+  .stamp { color: #9ca3af; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
+  .src { font-weight: 600; }
+  .tr { color: #2563eb; }
+  .empty { color: #9ca3af; }
+</style>
+</head>
+<body>
+  <h1>Live translation</h1>
+  <p class="sub">Whisper <code>{{ model }}</code> &rarr; Argos &rarr; OBS, running locally on port {{ port }}.</p>
+
+  <h2>OBS browser source URLs</h2>
+  <ul>
+    {% for language in languages %}
+    <li><a href="/display/{{ language.lower() }}">{{ language }}</a>
+      &mdash; <code>http://localhost:{{ port }}/display/{{ language.lower() }}</code></li>
+    {% endfor %}
+  </ul>
+
+  <h2>Live feed</h2>
+  <div id="feed"><span class="empty">Waiting for speech&hellip;</span></div>
+
+<script>
+  const feed = document.getElementById("feed");
+  let lastRevision = -1;
+
+  function render(lines) {
+    if (!lines.length) {
+      feed.innerHTML = '<span class="empty">Waiting for speech&hellip;</span>';
+      return;
+    }
+    feed.replaceChildren(...lines.map(line => {
+      const entry = document.createElement("div");
+      entry.className = "entry";
+
+      const stamp = document.createElement("div");
+      stamp.className = "stamp";
+      stamp.textContent = line.time;
+
+      const src = document.createElement("div");
+      src.className = "src";
+      src.textContent = line.source;
+
+      entry.append(stamp, src);
+      for (const [name, text] of Object.entries(line.translations || {})) {
+        const tr = document.createElement("div");
+        tr.className = "tr";
+        tr.textContent = `${name}: ${text}`;
+        entry.append(tr);
+      }
+      return entry;
+    }));
+    feed.scrollTop = feed.scrollHeight;
+  }
+
+  async function poll() {
+    try {
+      const res = await fetch("/api/lines", { cache: "no-store" });
+      const data = await res.json();
+      if (data.revision !== lastRevision) {
+        lastRevision = data.revision;
+        render(data.lines);
+      }
+    } catch (err) { /* retry on next tick */ }
+  }
+
+  poll();
+  setInterval(poll, 500);
+</script>
+</body>
+</html>
