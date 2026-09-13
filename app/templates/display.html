@@ -114,15 +114,40 @@
     return language === "Source" ? line.source : (line.translations || {})[language];
   }
 
+  // Reuse the DOM node for a line that is already on screen. Rebuilding every
+  // node replays the fade-in animation on all of them at once, which reads as
+  // the whole panel flashing - and with several overlays open, as the screen
+  // flickering. Only genuinely new lines are created and animated.
+  let rendered = new Map();   // line id -> element
+
   function render(lines, language) {
-    const recent = lines.slice(-visibleLines);
+    const recent = lines.slice(-visibleLines)
+      .map(line => ({id: line.id, text: textFor(line, language) || ""}))
+      .filter(line => line.text);
+
+    const next = new Map();
     const nodes = recent.map((line, i) => {
-      const div = document.createElement("div");
-      div.className = i < recent.length - 1 ? "line older" : "line newest";
-      div.textContent = textFor(line, language) || "";
-      return div;
-    }).filter(div => div.textContent);
-    container.replaceChildren(...nodes);
+      let node = rendered.get(line.id);
+      if (!node) {
+        node = document.createElement("div");
+        node.className = "line newest";     // animates in, once
+        node.textContent = line.text;
+      } else if (node.textContent !== line.text) {
+        // Same line, different language: swap the text without re-animating.
+        node.textContent = line.text;
+      }
+      const wanted = i < recent.length - 1 ? "line older" : "line newest";
+      if (node.className !== wanted) node.className = wanted;
+      next.set(line.id, node);
+      return node;
+    });
+
+    // Only touch the DOM if the set or order actually changed.
+    const current = [...container.children];
+    const same = current.length === nodes.length
+      && current.every((node, i) => node === nodes[i]);
+    if (!same) container.replaceChildren(...nodes);
+    rendered = next;
 
     // The panel is bottom-anchored with overflow hidden, so anything taller
     // than the canvas gets sliced through the middle of the oldest line.
@@ -130,7 +155,9 @@
     // newest line even if it alone overflows.
     while (container.scrollHeight > container.clientHeight
            && container.childElementCount > 1) {
-      container.removeChild(container.firstElementChild);
+      const dropped = container.firstElementChild;
+      container.removeChild(dropped);
+      for (const [id, node] of rendered) if (node === dropped) rendered.delete(id);
     }
   }
 
@@ -163,6 +190,7 @@
   });
 
   let lastChangeAt = Date.now();
+  let lastLineId = null;
   let polling = false;
 
   async function poll() {
@@ -176,21 +204,28 @@
 
       const s = data.settings || {};
       if (s.FONT_SIZE_VH) container.style.fontSize = s.FONT_SIZE_VH + "vh";
-      if (s.VISIBLE_LINES && s.VISIBLE_LINES !== visibleLines) {
-        visibleLines = s.VISIBLE_LINES;
-        render(data.lines, language);       // Re-render at the new line count.
-      }
+      if (s.VISIBLE_LINES && s.VISIBLE_LINES !== visibleLines) visibleLines = s.VISIBLE_LINES;
       if (s.CLEAR_SUBTITLES_AFTER_SECONDS !== undefined)
         clearAfterMs = s.CLEAR_SUBTITLES_AFTER_SECONDS * 1000;
+
+      // The countdown to blanking measures silence, so only actual new speech
+      // restarts it - not a language switch or a settings change, both of
+      // which also bump the revision.
+      const newestId = data.lines.length ? data.lines[data.lines.length - 1].id : null;
+      if (newestId !== lastLineId) {
+        lastLineId = newestId;
+        lastChangeAt = Date.now();
+      }
+
       if (data.revision !== lastRevision || language !== currentLanguage) {
         lastRevision = data.revision;
         currentLanguage = language;
-        lastChangeAt = Date.now();
         render(data.lines, language);
       } else if (clearAfterMs > 0
                  && container.childElementCount
                  && Date.now() - lastChangeAt > clearAfterMs) {
         container.replaceChildren();
+        rendered = new Map();
       }
     } catch (err) {
       /* Server restarting - keep the last frame on screen and retry. */

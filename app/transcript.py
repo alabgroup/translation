@@ -110,6 +110,7 @@ def add_line(source_text, translations, start, end):
         _last_end = end
 
         _lines.append({
+            "id": _srt_index,          # Stable key, so the overlay can diff.
             "time": datetime.now().strftime("%H:%M:%S"),
             "source": source_text,
             "translations": translations,

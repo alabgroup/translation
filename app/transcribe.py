@@ -42,6 +42,7 @@ def transcribe(audio):
         vad_filter=True,
         beam_size=1,
         condition_on_previous_text=False,
+        initial_prompt=config.WHISPER_VOCABULARY or None,
     )
 
     kept = []

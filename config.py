@@ -19,6 +19,24 @@ WHISPER_MODEL = "small"    # tiny | base | small | medium | large-v3
 WHISPER_COMPUTE = "int8"   # int8 is the fast CPU default on Apple silicon.
 SOURCE_LANG = "en"
 
+# --- Sentence assembly ---
+# A speaker who pauses mid-sentence for effect would otherwise have the
+# fragment translated on its own, which wrecks grammar in languages that need
+# the whole clause. Hold a fragment that does not end in terminal punctuation
+# and join it to what follows before translating.
+MERGE_INCOMPLETE_SENTENCES = True
+SENTENCE_ENDINGS = ".?!\u2026\u3002\uff1f\uff01"
+MAX_HOLD_SECONDS = 6.0       # Emit a held fragment anyway after this long.
+MAX_MERGED_WORDS = 60        # Never let a merged sentence grow past this.
+
+# Biases Whisper toward names and terms it would otherwise mishear. This is a
+# prompt, not training: cheap, immediate, and it costs nothing at runtime.
+WHISPER_VOCABULARY = (
+    "Alabaster Group. Scripture readings from Matthew, Mark, Luke, John, "
+    "Romans, Corinthians, Ephesians, Philippians, Psalms, Isaiah, Genesis, "
+    "Revelation. Amen. Hallelujah. Jesus Christ. Gospel. Congregation."
+)
+
 # --- Hallucination filtering ---
 # Whisper invents stock phrases when handed silence or non-speech noise.
 # Unfiltered they reset the overlay's clear timer, so subtitles never blank.

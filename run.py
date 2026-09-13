@@ -15,6 +15,7 @@ from waitress import serve
 
 import config
 from app import audio, transcribe, transcript
+from app.sentences import SentenceBuffer
 from app.server import app
 from app.translate import Translator
 
@@ -29,8 +30,27 @@ def start_server():
     return thread
 
 
-def audio_loop(translator, stop_event):
-    """Transcribe and translate each utterance until asked to stop.
+def make_emitter(translator):
+    """Translate one complete sentence and publish it."""
+    def emit(text, start, end):
+        try:
+            began = time.time()
+            translations = translator.translate(text)
+            transcript.add_line(text, translations, start, end)
+
+            print(f"\n[{end - start:.1f}s audio, {time.time() - began:.1f}s translating]")
+            print(f"  {config.SOURCE_LANG}: {text}")
+            for name, translated in translations.items():
+                print(f"  {name}: {translated}")
+        except Exception:
+            # Also runs on the watchdog thread, which must never die.
+            print("\n[error] failed to translate one sentence:")
+            traceback.print_exc()
+    return emit
+
+
+def audio_loop(sentences, stop_event):
+    """Transcribe each utterance until asked to stop.
 
     One bad utterance must never end the service. Every failure is logged and
     skipped: the web server runs on a daemon thread, so an exception escaping
@@ -38,20 +58,14 @@ def audio_loop(translator, stop_event):
     """
     for chunk, start, end in audio.utterances(stop_event):
         try:
-            duration = end - start
             began = time.time()
-
             text = transcribe.transcribe(chunk)
             if not text:
                 continue
-
-            translations = translator.translate(text)
-            transcript.add_line(text, translations, start, end)
-
-            print(f"\n[{duration:.1f}s audio, {time.time() - began:.1f}s processing]")
-            print(f"  {config.SOURCE_LANG}: {text}")
-            for name, translated in translations.items():
-                print(f"  {name}: {translated}")
+            print(f"[heard {end - start:.1f}s in {time.time() - began:.1f}s] {text}")
+            # Held until the sentence closes, so a dramatic pause does not get
+            # translated as half a clause.
+            sentences.add(text, start, end)
         except Exception:
             print("\n[error] skipped one utterance:")
             traceback.print_exc()
@@ -110,7 +124,10 @@ def main():
     print(f"Input device:  {audio.describe_device(config.INPUT_DEVICE)}")
     print(f"Transcripts:   {transcript.OUTPUT_DIR}")
     print("\nListening. Speak into the selected input. Ctrl+C to stop.\n")
-    audio_loop(translator, stop_event)
+    sentences = SentenceBuffer(make_emitter(translator))
+    sentences.watch(stop_event)
+    audio_loop(sentences, stop_event)
+    sentences.flush()          # whatever was mid-sentence when we stopped
     audio.close_recording()
     print("Stopped.")
 

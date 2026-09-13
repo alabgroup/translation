@@ -164,6 +164,24 @@ Settings live in `config.py`:
 | `app/server.py` | Flask routes |
 | `app/templates/` | Control page and OBS overlay |
 
+## Sentence assembly
+
+A preacher pausing mid-sentence for effect produces two utterances where one
+sentence was meant. Translating the first half alone wrecks the grammar in
+languages that inflect for what comes later, so a fragment that does not end in
+terminal punctuation is held and joined to whatever follows
+(`MERGE_INCOMPLETE_SENTENCES`).
+
+Holding is bounded: a watchdog thread releases anything held longer than
+`MAX_HOLD_SECONDS`, so a speaker who simply stops mid-sentence still reaches the
+screen, and `MAX_MERGED_WORDS` caps how long a merged sentence can grow. This
+trades a little latency on incomplete clauses for correct grammar on complete
+ones.
+
+`WHISPER_VOCABULARY` biases transcription toward names and terms Whisper would
+otherwise mishear. It is a prompt, not training — free at runtime, and the first
+thing to reach for when a specific name comes out wrong.
+
 ## Evaluating accuracy
 
 `eval.py` measures how much accuracy the live pipeline gives up for speed. It
