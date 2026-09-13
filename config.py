@@ -67,8 +67,9 @@ TRANSLATION_FIXES = {
 }
 
 # --- Branding ---
-# Shown on the control page. Acts 2: everyone heard in their own language.
-APP_NAME = "Pentecost"
+# Shown on the control page. A passage of scripture, and passing speech
+# across from one language into another.
+APP_NAME = "Passage"
 APP_TAGLINE = "live translation"
 
 # Colorway per language, used for the accent wash on the control page.

@@ -82,8 +82,8 @@ virtual audio device and select that device:
 
 ## Control page
 
-Named `Pentecost` after Acts 2, where everyone heard in their own language.
-Rename it in `config.py` via `APP_NAME` / `APP_TAGLINE`.
+Named `Passage` — a passage of scripture, and passing speech across from one
+language into another. Rename it in `config.py` via `APP_NAME` / `APP_TAGLINE`.
 
 Each language carries a colorway (`LANGUAGE_COLORS`), and the interface eases
 to whichever one is live — so the colour of the console tells you what is on
