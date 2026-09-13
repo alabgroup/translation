@@ -111,6 +111,7 @@ def main():
     print(f"Transcripts:   {transcript.OUTPUT_DIR}")
     print("\nListening. Speak into the selected input. Ctrl+C to stop.\n")
     audio_loop(translator, stop_event)
+    audio.close_recording()
     print("Stopped.")
 
 

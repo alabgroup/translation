@@ -111,3 +111,8 @@ FONT_SIZE_VH = 4.4   # Overlay text size, in percent of canvas height.
 
 # --- Output ---
 WRITE_SRT = True           # Write transcript/translation .srt files next to the app.
+
+# Record the captured audio to output/<run>/audio.wav. Needed to evaluate
+# accuracy afterwards, since eval.py re-transcribes that audio with a larger
+# model. Off by default: it records everything the microphone hears.
+RECORD_AUDIO = False

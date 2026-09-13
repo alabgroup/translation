@@ -164,6 +164,37 @@ Settings live in `config.py`:
 | `app/server.py` | Flask routes |
 | `app/templates/` | Control page and OBS overlay |
 
+## Evaluating accuracy
+
+`eval.py` measures how much accuracy the live pipeline gives up for speed. It
+re-transcribes a run's recorded audio with a larger Whisper model and compares
+that against what the live pipeline produced.
+
+```bash
+# 1. Set RECORD_AUDIO = True in config.py, then run a service or rehearsal.
+python run.py
+
+# 2. Score the newest run.
+python eval.py                       # reference: large-v3
+python eval.py --model medium        # faster, cheaper reference
+python eval.py output/20260913-1128  # a specific run
+```
+
+It reports word error rate split into substitutions, deletions and insertions:
+
+- **Deletions** — speech that was said but never transcribed. Usually segmentation:
+  the silence threshold is too high, or the shortest-phrase setting is dropping
+  real responses.
+- **Insertions** — words transcribed that were never said. Usually hallucinated
+  filler on silence; extend `HALLUCINATION_PHRASES` or raise `SILENCE_RMS`.
+- **Substitutions** — genuinely misheard words. This is the number a bigger
+  `WHISPER_MODEL` improves.
+
+**The bigger model is a proxy reference, not ground truth.** This answers "how
+much worse is `small` than `large-v3`", which is what decides whether to change
+`WHISPER_MODEL`. Absolute accuracy needs a human-written transcript — to get
+that, transcribe a few minutes by hand and compare against `en.txt`.
+
 ## Troubleshooting
 
 **No subtitles appear.** Check the control page feed first. If it is empty, the mic

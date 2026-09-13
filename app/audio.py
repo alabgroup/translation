@@ -15,6 +15,7 @@ and changes them while the service is running.
 import queue
 import threading
 import time
+import wave
 
 import numpy as np
 import sounddevice as sd
@@ -102,6 +103,31 @@ def _record_level(value):
     global _level
     with _lock:
         _level = value
+
+
+_recorder = None
+
+
+def _recording_file():
+    """Lazily open one WAV per run, shared across device switches."""
+    global _recorder
+    if _recorder is None and config.RECORD_AUDIO:
+        from app import transcript
+        transcript.OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+        path = transcript.OUTPUT_DIR / "audio.wav"
+        _recorder = wave.open(str(path), "wb")
+        _recorder.setnchannels(1)
+        _recorder.setsampwidth(2)          # 16-bit
+        _recorder.setframerate(config.SAMPLE_RATE)
+        print(f"[audio] recording to {path}")
+    return _recorder
+
+
+def close_recording():
+    global _recorder
+    if _recorder is not None:
+        _recorder.close()
+        _recorder = None
 
 
 def utterances(stop_event):
@@ -208,6 +234,13 @@ def _capture(device, stop_event):
             max_frames = int(config.MAX_UTTERANCE_SECONDS * config.SAMPLE_RATE)
 
             captured_frames += len(block)
+
+            recorder = _recording_file()
+            if recorder is not None:
+                # float32 [-1, 1] to signed 16-bit PCM.
+                clipped = np.clip(block, -1.0, 1.0)
+                recorder.writeframes((clipped * 32767).astype(np.int16).tobytes())
+
             rms = float(np.sqrt(np.mean(block ** 2)))
             _record_level(rms)       # Meter keeps moving even while muted, so
                                      # the operator can see the feed is alive.
