@@ -37,7 +37,8 @@
     -webkit-font-smoothing: antialiased;
     font-variant-numeric: tabular-nums;
     display: grid;
-    grid-template-columns: minmax(320px, 400px) 1fr;
+    /* --left is moved by dragging the divider; see the splitter script. */
+    grid-template-columns: var(--left, 380px) 1px 1fr;
   }
 
   /* ---- Structure ---- */
@@ -45,8 +46,28 @@
     padding: 22px 20px 40px;
     overflow-y: auto;
     background: var(--canvas);
-    border-right: 1px solid var(--separator);
   }
+
+  /* Divider: a hairline with a wider invisible grab area, so it is easy to
+     hit without drawing a thick rule. */
+  #divider {
+    position: relative;
+    background: var(--separator);
+    cursor: col-resize;
+    touch-action: none;
+  }
+  #divider::before {
+    content: ""; position: absolute; inset: 0 -5px; z-index: 2;
+  }
+  #divider::after {
+    content: ""; position: absolute; top: 50%; left: -1px;
+    width: 3px; height: 36px; margin-top: -18px; border-radius: 2px;
+    background: var(--surface-3); opacity: 0; transition: opacity 140ms ease;
+  }
+  #divider:hover::after, #divider.dragging::after { opacity: 1; }
+  #divider.dragging { background: var(--blue); }
+  body.resizing { cursor: col-resize; user-select: none; }
+  body.resizing #preview { pointer-events: none; }   /* keep drags out of the iframe */
   #stage {
     padding: 22px 24px 24px;
     display: flex;
@@ -196,8 +217,12 @@
   .dot.on { background: var(--green); animation: pulse 2s ease-in-out infinite; }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
 
+  /* Width follows the divider. The height cap keeps the transcript visible
+     when the pane is dragged wide. */
   #preview-wrap {
-    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    position: relative; width: 100%;
+    max-width: calc((100vh - 300px) * 16 / 9);
+    aspect-ratio: 16 / 9;
     border-radius: var(--radius); overflow: hidden;
     background: #000;
     box-shadow: 0 0 0 0.5px var(--separator), 0 12px 32px rgba(0,0,0,0.55);
@@ -210,7 +235,7 @@
   }
 
   #feed {
-    flex: 1; min-height: 0; overflow-y: auto;
+    flex: 1; min-height: 140px; overflow-y: auto;
     background: var(--surface); border-radius: var(--radius-lg);
     padding: 4px 16px;
   }
@@ -287,6 +312,9 @@
       </div>
     </div>
   </div>
+
+  <div id="divider" role="separator" aria-orientation="vertical"
+       aria-label="Resize panels" tabindex="0"></div>
 
   <div id="stage">
     <div class="stage-head">
@@ -526,6 +554,56 @@
       if (data.revision !== lastRevision) { lastRevision = data.revision; render(data.lines); }
     } catch (err) {}
   }
+
+  // ---- Splitter ----
+  const divider = document.getElementById("divider");
+  const MIN_LEFT = 280, MIN_RIGHT = 360;
+
+  function setLeft(px) {
+    const max = Math.max(MIN_LEFT, window.innerWidth - MIN_RIGHT);
+    const width = Math.round(Math.min(Math.max(px, MIN_LEFT), max));
+    document.body.style.setProperty("--left", width + "px");
+    try { localStorage.setItem("splitLeft", width); } catch (err) {}
+  }
+
+  try {
+    const saved = parseInt(localStorage.getItem("splitLeft"), 10);
+    if (saved) setLeft(saved);
+  } catch (err) {}
+
+  divider.addEventListener("pointerdown", (event) => {
+    event.preventDefault();
+    divider.setPointerCapture(event.pointerId);
+    divider.classList.add("dragging");
+    document.body.classList.add("resizing");
+  });
+  divider.addEventListener("pointermove", (event) => {
+    if (!divider.hasPointerCapture(event.pointerId)) return;
+    setLeft(event.clientX);
+  });
+  function endDrag(event) {
+    if (divider.hasPointerCapture(event.pointerId))
+      divider.releasePointerCapture(event.pointerId);
+    divider.classList.remove("dragging");
+    document.body.classList.remove("resizing");
+  }
+  divider.addEventListener("pointerup", endDrag);
+  divider.addEventListener("pointercancel", endDrag);
+  // Double-click restores the default split.
+  divider.addEventListener("dblclick", () => setLeft(380));
+  // Keyboard nudging, since the divider is focusable.
+  divider.addEventListener("keydown", (event) => {
+    const step = event.shiftKey ? 40 : 10;
+    const current = parseInt(getComputedStyle(document.body)
+      .getPropertyValue("--left"), 10) || 380;
+    if (event.key === "ArrowLeft") { setLeft(current - step); event.preventDefault(); }
+    if (event.key === "ArrowRight") { setLeft(current + step); event.preventDefault(); }
+  });
+  window.addEventListener("resize", () => {
+    const current = parseInt(getComputedStyle(document.body)
+      .getPropertyValue("--left"), 10);
+    if (current) setLeft(current);   // Re-clamp against the new window width.
+  });
 
   paintMute();
   loadTuning();
