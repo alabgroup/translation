@@ -15,7 +15,32 @@ _revision = 0        # Bumped on every append so the display can poll cheaply.
 _srt_index = 1
 _started_at = None
 
+# The language the /display/active overlay shows. Operators switch this from
+# the control page mid-service, so the OBS source URL never has to change.
+_active_language = next(iter(config.TARGET_LANGS), "Source")
+
 MAX_LINES = 50
+
+
+def languages():
+    """Every language the overlay can show, source included."""
+    return ["Source", *config.TARGET_LANGS]
+
+
+def active_language():
+    with _lock:
+        return _active_language
+
+
+def set_active_language(name):
+    """Point the /display/active overlay at a different language."""
+    global _active_language, _revision
+    if name not in languages():
+        raise ValueError(f"Unknown language {name!r}")
+    with _lock:
+        _active_language = name
+        _revision += 1   # Nudge pollers so the overlay switches immediately.
+    return name
 
 
 def _srt_timestamp(seconds):
@@ -58,6 +83,6 @@ def add_line(source_text, translations, duration):
 
 
 def snapshot():
-    """Return (revision, lines) for the display page."""
+    """Return (revision, lines, active language) for the display pages."""
     with _lock:
-        return _revision, list(_lines)
+        return _revision, list(_lines), _active_language

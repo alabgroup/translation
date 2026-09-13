@@ -22,10 +22,12 @@
     justify-content: flex-end;
     align-items: center;
     gap: 0.4em;
-    font-family: "Helvetica Neue", Helvetica, Arial, sans-serif;
+    /* CJK faces are listed so Chinese renders with proper glyphs, not fallback boxes. */
+    font-family: "Helvetica Neue", Helvetica, Arial,
+                 "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
     font-size: 4.2vh;
     font-weight: 600;
-    line-height: 1.3;
+    line-height: 1.35;
     text-align: center;
     color: #fff;
     text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
@@ -43,40 +45,97 @@
     from { opacity: 0; transform: translateY(0.3em); }
     to   { opacity: 1; transform: none; }
   }
+  /* Only visible when the page is opened in a normal browser tab, not in OBS. */
+  #picker {
+    position: absolute;
+    top: 0;
+    left: 0;
+    padding: 0.5rem 0.75rem;
+    font: 13px -apple-system, BlinkMacSystemFont, sans-serif;
+    background: rgba(0, 0, 0, 0.65);
+    color: #fff;
+    border-bottom-right-radius: 6px;
+    opacity: 0;
+    transition: opacity 150ms;
+  }
+  #picker:hover, #picker:focus-within { opacity: 1; }
 </style>
 </head>
 <body>
+<div id="picker">
+  <label>Language
+    <select id="language-select"></select>
+  </label>
+</div>
 <div id="subtitles"></div>
 <script>
-  const LANGUAGE = {{ language | tojson }};
+  // "active" means follow whatever the control page selected.
+  const PINNED = {{ language | tojson }};
+  const FOLLOW_ACTIVE = PINNED === "active";
   const VISIBLE_LINES = 2;
-  const container = document.getElementById("subtitles");
-  let lastRevision = -1;
 
-  function textFor(line) {
-    return LANGUAGE === "Source" ? line.source : (line.translations || {})[LANGUAGE];
+  const container = document.getElementById("subtitles");
+  const select = document.getElementById("language-select");
+  let lastRevision = -1;
+  let currentLanguage = FOLLOW_ACTIVE ? null : PINNED;
+  let knownLanguages = [];
+
+  function textFor(line, language) {
+    return language === "Source" ? line.source : (line.translations || {})[language];
   }
 
-  function render(lines) {
+  function render(lines, language) {
     const recent = lines.slice(-VISIBLE_LINES);
-    container.replaceChildren(...recent.map((line, i) => {
+    const nodes = recent.map((line, i) => {
       const div = document.createElement("div");
       div.className = i < recent.length - 1 ? "line older" : "line";
-      div.textContent = textFor(line) || "";
+      div.textContent = textFor(line, language) || "";
       return div;
-    }).filter(div => div.textContent));
+    }).filter(div => div.textContent);
+    container.replaceChildren(...nodes);
   }
+
+  function syncPicker(languages, active) {
+    if (languages.join("|") !== knownLanguages.join("|")) {
+      knownLanguages = languages;
+      select.replaceChildren(...languages.map(name => {
+        const option = document.createElement("option");
+        option.value = name;
+        option.textContent = name;
+        return option;
+      }));
+    }
+    if (document.activeElement !== select) select.value = active;
+  }
+
+  select.addEventListener("change", async () => {
+    const language = select.value;
+    if (FOLLOW_ACTIVE) {
+      // Switch the shared selection so the OBS overlay follows too.
+      await fetch("/api/active", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({language}),
+      }).catch(() => {});
+    } else {
+      currentLanguage = language;
+      lastRevision = -1;
+    }
+  });
 
   async function poll() {
     try {
-      const res = await fetch("/api/lines", { cache: "no-store" });
+      const res = await fetch("/api/lines", {cache: "no-store"});
       const data = await res.json();
-      if (data.revision !== lastRevision) {
+      const language = FOLLOW_ACTIVE ? data.active : currentLanguage;
+      syncPicker(data.languages || [], language);
+      if (data.revision !== lastRevision || language !== currentLanguage) {
         lastRevision = data.revision;
-        render(data.lines);
+        currentLanguage = language;
+        render(data.lines, language);
       }
     } catch (err) {
-      /* Server restarting — keep the last frame on screen and retry. */
+      /* Server restarting - keep the last frame on screen and retry. */
     }
   }
 

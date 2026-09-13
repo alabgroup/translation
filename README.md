@@ -53,13 +53,21 @@ Press Ctrl+C to stop.
 
 ## OBS setup
 
-Add a **Browser Source** for each language you want on screen:
+Add one **Browser Source** pointing at:
 
-- `http://localhost:8000/display/source` — English
-- `http://localhost:8000/display/portuguese` — Portuguese
+```
+http://localhost:8000/display/active
+```
+
+This overlay follows whichever language is selected on the control page, so an
+operator can switch languages mid-service without touching OBS. Only one
+language is on screen at a time.
 
 Set the source to the canvas size (e.g. 1920×1080). The page background is
 transparent, so subtitles composite over the video.
+
+To pin a source to one fixed language instead, use `/display/<language>` —
+`/display/source`, `/display/portuguese`, `/display/spanish`, `/display/chinese`.
 
 ## Capturing computer audio instead of the mic
 
@@ -76,8 +84,10 @@ virtual audio device and select that device:
 
 Settings live in `config.py`:
 
-- `TARGET_LANGS` — display name → language code. Add entries to translate into
-  more languages; each one gets its own `/display/<name>` page.
+- `TARGET_LANGS` — display name → language code. Ships with Portuguese, Spanish
+  and Chinese (Mandarin, simplified script). Every utterance is translated into
+  all of them, so switching languages on the control page is instant. Add entries
+  to translate into more; each gets its own `/display/<name>` page.
 - `WHISPER_MODEL` — `tiny`/`base`/`small`/`medium`/`large-v3`. Bigger is more
   accurate and slower.
 - `SILENCE_RMS`, `SILENCE_SECONDS` — how a pause is detected. Raise `SILENCE_RMS`

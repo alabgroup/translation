@@ -67,8 +67,8 @@ def main():
 
     start_server()
     print(f"\nControl page:  http://localhost:{config.PORT}/")
-    for name in ["Source", *config.TARGET_LANGS]:
-        print(f"OBS source:    http://localhost:{config.PORT}/display/{name.lower()}")
+    print(f"OBS source:    http://localhost:{config.PORT}/display/active")
+    print(f"Languages:     {', '.join(transcript.languages())}")
 
     if args.no_audio:
         print("\nRunning without audio capture. Ctrl+C to stop.")

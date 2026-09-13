@@ -18,8 +18,12 @@ SOURCE_LANG = "en"
 
 # --- Translation ---
 # Display name -> target language code, used by the translator and the display page.
+# Names are used in the overlay URLs (/display/spanish), so keep them URL-friendly.
+# "zh" is Mandarin Chinese in simplified script.
 TARGET_LANGS = {
     "Portuguese": "pt",
+    "Spanish": "es",
+    "Chinese": "zh",
 }
 
 # --- Server ---

@@ -7,19 +7,42 @@
 <style>
   :root { color-scheme: light dark; }
   body {
-    margin: 0;
+    margin: 0 auto;
     padding: 2rem 1.5rem 3rem;
-    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", "Hiragino Sans GB", sans-serif;
     max-width: 52rem;
-    margin-inline: auto;
   }
   h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
   .sub { color: #6b7280; margin: 0 0 2rem; }
-  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em; color: #6b7280; margin: 2rem 0 0.6rem; }
+  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
+       color: #6b7280; margin: 2rem 0 0.6rem; }
   a { color: #2563eb; }
+  code { background: rgba(127,127,127,0.14); padding: 0.1em 0.35em;
+         border-radius: 3px; font-size: 0.9em; }
   ul { margin: 0; padding-left: 1.1rem; }
   li { margin-bottom: 0.35rem; }
-  code { background: rgba(127,127,127,0.14); padding: 0.1em 0.35em; border-radius: 3px; font-size: 0.9em; }
+
+  /* Language picker */
+  #languages { display: flex; flex-wrap: wrap; gap: 0.5rem; }
+  .lang-btn {
+    font: inherit;
+    padding: 0.5rem 1rem;
+    border: 1px solid rgba(127,127,127,0.4);
+    border-radius: 999px;
+    background: transparent;
+    color: inherit;
+    cursor: pointer;
+  }
+  .lang-btn:hover { border-color: #2563eb; }
+  .lang-btn[aria-pressed="true"] {
+    background: #2563eb;
+    border-color: #2563eb;
+    color: #fff;
+    font-weight: 600;
+  }
+  .hint { color: #6b7280; font-size: 0.85rem; margin: 0.6rem 0 0; }
+
   #feed {
     border: 1px solid rgba(127,127,127,0.3);
     border-radius: 8px;
@@ -32,7 +55,8 @@
   .entry:last-child { border-bottom: 0; }
   .stamp { color: #9ca3af; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
   .src { font-weight: 600; }
-  .tr { color: #2563eb; }
+  .tr { color: #6b7280; }
+  .tr.live { color: #2563eb; font-weight: 600; }
   .empty { color: #9ca3af; }
 </style>
 </head>
@@ -40,10 +64,25 @@
   <h1>Live translation</h1>
   <p class="sub">Whisper <code>{{ model }}</code> &rarr; Argos &rarr; OBS, running locally on port {{ port }}.</p>
 
-  <h2>OBS browser source URLs</h2>
+  <h2>On screen now</h2>
+  <div id="languages"></div>
+  <p class="hint">
+    Changing this instantly switches the
+    <code>http://localhost:{{ port }}/display/active</code> overlay &mdash;
+    no need to touch OBS mid-service.
+  </p>
+
+  <h2>OBS browser source</h2>
+  <ul>
+    <li><strong>Use this one:</strong>
+      <code>http://localhost:{{ port }}/display/active</code>
+      &mdash; follows the selection above
+      (<a href="/display/active" target="_blank">preview</a>)</li>
+  </ul>
+  <p class="hint">Pinned to a single language instead, if you ever need it:</p>
   <ul>
     {% for language in languages %}
-    <li><a href="/display/{{ language.lower() }}">{{ language }}</a>
+    <li><a href="/display/{{ language.lower() }}" target="_blank">{{ language }}</a>
       &mdash; <code>http://localhost:{{ port }}/display/{{ language.lower() }}</code></li>
     {% endfor %}
   </ul>
@@ -53,11 +92,48 @@
 
 <script>
   const feed = document.getElementById("feed");
+  const languageBar = document.getElementById("languages");
   let lastRevision = -1;
+  let knownLanguages = [];
+  let active = null;
+
+  async function setActive(language) {
+    active = language;                       // Optimistic, so the click feels instant.
+    paintButtons();
+    try {
+      await fetch("/api/active", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({language}),
+      });
+    } catch (err) { /* next poll re-syncs */ }
+  }
+
+  function paintButtons() {
+    for (const button of languageBar.children) {
+      button.setAttribute("aria-pressed", String(button.dataset.language === active));
+    }
+  }
+
+  function syncButtons(languages) {
+    if (languages.join("|") !== knownLanguages.join("|")) {
+      knownLanguages = languages;
+      languageBar.replaceChildren(...languages.map(name => {
+        const button = document.createElement("button");
+        button.className = "lang-btn";
+        button.textContent = name;
+        button.dataset.language = name;
+        button.addEventListener("click", () => setActive(name));
+        return button;
+      }));
+    }
+    paintButtons();
+  }
 
   function render(lines) {
     if (!lines.length) {
-      feed.innerHTML = '<span class="empty">Waiting for speech&hellip;</span>';
+      feed.replaceChildren(Object.assign(document.createElement("span"),
+        {className: "empty", textContent: "Waiting for speech…"}));
       return;
     }
     feed.replaceChildren(...lines.map(line => {
@@ -75,7 +151,8 @@
       entry.append(stamp, src);
       for (const [name, text] of Object.entries(line.translations || {})) {
         const tr = document.createElement("div");
-        tr.className = "tr";
+        // Highlight the language currently on screen.
+        tr.className = name === active ? "tr live" : "tr";
         tr.textContent = `${name}: ${text}`;
         entry.append(tr);
       }
@@ -86,8 +163,10 @@
 
   async function poll() {
     try {
-      const res = await fetch("/api/lines", { cache: "no-store" });
+      const res = await fetch("/api/lines", {cache: "no-store"});
       const data = await res.json();
+      if (active === null) active = data.active;
+      syncButtons(data.languages || []);
       if (data.revision !== lastRevision) {
         lastRevision = data.revision;
         render(data.lines);
