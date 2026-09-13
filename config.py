@@ -92,9 +92,9 @@ APP_TAGLINE = "live translation"
 # Muted, desaturated tones - they tint the interface, never shout.
 LANGUAGE_COLORS = {
     "Source":     "#8E9AAF",   # Granite
-    "Portuguese": "#E8875A",   # Sorrento Tangerine
-    "Spanish":    "#A896E8",   # Luberon Lavender
+    "Spanish":    "#E8875A",   # Sorrento Tangerine
     "Chinese":    "#5FB79A",   # Eucalyptus
+    "Portuguese": "#A896E8",   # Luberon Lavender (inactive)
 }
 LANGUAGE_COLOR_FALLBACK = "#8E9AAF"
 
