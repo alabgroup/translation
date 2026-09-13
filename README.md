@@ -213,6 +213,22 @@ much worse is `small` than `large-v3`", which is what decides whether to change
 `WHISPER_MODEL`. Absolute accuracy needs a human-written transcript — to get
 that, transcribe a few minutes by hand and compare against `en.txt`.
 
+## Tests
+
+```bash
+.venv/bin/python -m pytest -q
+```
+
+203 tests, no network and no model loading — they stub those boundaries and run
+in under a second. They cover SRT timestamp maths and cue ordering, the output
+files, hallucination filtering, settings validation, device resolution, the HTTP
+API contract, and the WER maths in `eval.py`.
+
+Several lock down bugs that actually shipped: negative SRT timestamps, output
+written to a directory whose parent did not exist, alphabetically sorted
+language order, settings partially applied from a rejected batch, and language
+names resolving differently in URLs than in the API.
+
 ## Troubleshooting
 
 **No subtitles appear.** Check the control page feed first. If it is empty, the mic

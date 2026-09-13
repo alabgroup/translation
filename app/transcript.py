@@ -37,15 +37,28 @@ def active_language():
         return _active_language
 
 
+def resolve_language(name):
+    """Canonical name for a language, matched case-insensitively.
+
+    Display URLs accept /display/spanish, so the API must accept "spanish"
+    too - the same name answering differently in two places is a trap.
+    """
+    if not name:
+        return None
+    wanted = str(name).strip().lower()
+    return next((n for n in languages() if n.lower() == wanted), None)
+
+
 def set_active_language(name):
     """Point the /display/active overlay at a different language."""
     global _active_language, _revision
-    if name not in languages():
+    canonical = resolve_language(name)
+    if canonical is None:
         raise ValueError(f"Unknown language {name!r}")
     with _lock:
-        _active_language = name
+        _active_language = canonical
         _revision += 1   # Nudge pollers so the overlay switches immediately.
-    return name
+    return canonical
 
 
 def _srt_timestamp(seconds):

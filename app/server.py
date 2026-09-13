@@ -45,7 +45,7 @@ def display_active():
 @app.route("/display/<language>")
 def display(language):
     """Overlay pinned to one language, regardless of the control page."""
-    match = next((n for n in transcript.languages() if n.lower() == language.lower()), None)
+    match = transcript.resolve_language(language)
     if match is None:
         abort(404, f"Unknown language {language!r}. Available: {', '.join(transcript.languages())}")
     return render_template("display.html", language=match,

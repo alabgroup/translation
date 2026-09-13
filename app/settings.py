@@ -27,23 +27,30 @@ def values():
 
 
 def update(changes):
-    """Apply validated changes. Returns the values actually written."""
-    applied = {}
+    """Apply validated changes, all or nothing. Returns the values written.
+
+    Every value is validated before any is written. Applying them as they are
+    checked would leave a rejected batch half-applied: the caller receives an
+    error implying nothing changed while an earlier setting has already moved.
+    """
+    staged = {}
+    for name, raw in changes.items():
+        spec = config.TUNABLE.get(name)
+        if spec is None:
+            raise ValueError(f"{name!r} is not tunable while running")
+        try:
+            number = float(raw)
+        except (TypeError, ValueError):
+            raise ValueError(f"{name} must be a number, got {raw!r}")
+        if not spec["min"] <= number <= spec["max"]:
+            raise ValueError(
+                f"{name} must be between {spec['min']} and {spec['max']}")
+        # Settings whose step is a whole number are counts, not measurements.
+        if float(spec["step"]).is_integer():
+            number = int(round(number))
+        staged[name] = number
+
     with _lock:
-        for name, raw in changes.items():
-            spec = config.TUNABLE.get(name)
-            if spec is None:
-                raise ValueError(f"{name!r} is not tunable while running")
-            try:
-                number = float(raw)
-            except (TypeError, ValueError):
-                raise ValueError(f"{name} must be a number, got {raw!r}")
-            if not spec["min"] <= number <= spec["max"]:
-                raise ValueError(
-                    f"{name} must be between {spec['min']} and {spec['max']}")
-            # Settings whose step is a whole number are counts, not measurements.
-            if float(spec["step"]).is_integer():
-                number = int(round(number))
+        for name, number in staged.items():
             setattr(config, name, number)
-            applied[name] = number
-    return applied
+    return staged
