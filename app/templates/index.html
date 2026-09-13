@@ -242,23 +242,56 @@
   }
   @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
 
-  #preview-wrap {
-    position: relative; width: 100%;
-    max-width: calc((100vh - 300px) * 16 / 9);
-    aspect-ratio: 16 / 9;
-    border-radius: var(--radius); overflow: hidden;
-    background: #0e0f12;
-    box-shadow:
-      0 0 0 0.5px var(--separator),
-      0 18px 44px rgba(0,0,0,0.6),
-      0 0 60px -18px color-mix(in oklab, var(--accent) 40%, transparent);
-    transition: box-shadow 700ms cubic-bezier(0.32, 0.72, 0, 1);
+  /* One tile per language, side by side. Each is cropped to the subtitle
+     panel - the left half of the canvas - since the right half is always
+     transparent video and shows nothing worth the space. */
+  #compare {
+    display: grid; gap: 14px; overflow-y: auto; align-content: start;
+    grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+    max-height: 62vh; flex: none;
   }
-  #preview { position: absolute; inset: 0; width: 100%; height: 100%;
-             border: 0; background: #0e0f12; color-scheme: dark; }
+  .tile { position: relative; cursor: pointer; border: 0; padding: 0;
+          background: none; text-align: left; }
+  .tile-frame {
+    position: relative; width: 100%;
+    aspect-ratio: 8 / 9;            /* the left half of a 16:9 canvas */
+    border-radius: var(--radius); overflow: hidden; background: #000;
+    box-shadow: 0 0 0 0.5px var(--separator), 0 10px 26px rgba(0,0,0,0.5);
+    transition: box-shadow 300ms ease, transform 300ms ease;
+  }
+  .tile:hover .tile-frame { transform: translateY(-2px); }
+  .tile[aria-pressed="true"] .tile-frame {
+    box-shadow: 0 0 0 2px var(--tile), 0 12px 32px rgba(0,0,0,0.55),
+                0 0 54px -14px var(--tile);
+  }
+  /* Twice the frame width so the iframe keeps a 16:9 shape; the overflow
+     hidden above crops away the empty right half. */
+  .tile iframe {
+    position: absolute; top: 0; left: 0; width: 200%; height: 100%;
+    border: 0; background: transparent; color-scheme: dark;
+    pointer-events: none;
+  }
+  .tile-bar { display: flex; align-items: center; gap: 6px; margin: 9px 2px 0; }
+  .tile-swatch { width: 8px; height: 8px; border-radius: 3px; background: var(--tile); }
+  .tile-name { font-size: 12px; font-weight: 560; color: var(--label); }
+  .tile-state { font-size: 10.5px; color: var(--label-3); margin-left: auto;
+                text-transform: uppercase; letter-spacing: 0.06em; }
+  .tile[aria-pressed="true"] .tile-state { color: var(--tile); font-weight: 600; }
+
+  /* Feed */
+  #feed-wrap { position: relative; flex: 1; min-height: 140px; display: flex; }
+  #jump {
+    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+    font: inherit; font-size: 11.5px; font-weight: 560; padding: 6px 13px;
+    border: 0.5px solid var(--separator); border-radius: 999px; cursor: pointer;
+    background: var(--surface-3); color: var(--label);
+    box-shadow: 0 4px 14px rgba(0,0,0,0.5); opacity: 0;
+    pointer-events: none; transition: opacity 200ms ease;
+  }
+  #jump.show { opacity: 1; pointer-events: auto; }
 
   #feed {
-    flex: 1; min-height: 140px; overflow-y: auto;
+    flex: 1; min-width: 0; overflow-y: auto;
     background: var(--surface); border: 0.5px solid var(--separator);
     border-radius: var(--radius-lg); padding: 4px 17px;
   }
@@ -336,14 +369,14 @@
 
   <div id="stage">
     <div class="stage-head">
-      <p class="section-title" style="margin:0">Overlay preview</p>
+      <p class="section-title" style="margin:0">Languages — click to put one on screen</p>
       <span class="live"><span class="dot" id="live-dot"></span><span id="live-text">idle</span></span>
     </div>
-    <div id="preview-wrap">
-      <!-- preview=1 paints a backdrop; OBS loads the URL without it and stays transparent. -->
-      <iframe id="preview" src="/display/active?preview=1" title="Overlay preview"></iframe>
+    <div id="compare"></div>
+    <div id="feed-wrap">
+      <div id="feed"><div class="empty">Waiting for speech…</div></div>
+      <button id="jump">↓ New lines</button>
     </div>
-    <div id="feed"><div class="empty">Waiting for speech…</div></div>
   </div>
 
 <script>
@@ -381,6 +414,7 @@
       b.setAttribute("aria-pressed", String(on));
       b.style.setProperty("--seg", colorFor(b.dataset.language));
     }
+    if (typeof paintTiles === "function") paintTiles();
   }
   function syncSegments(languages) {
     if (languages.join("|") !== knownLanguages.join("|")) {
@@ -393,6 +427,7 @@
       }));
     }
     paintSegments();
+    buildTiles(languages);
   }
 
   // ---- Audio ----
@@ -538,7 +573,10 @@
       entry.append(stamp, src);
       const translations = line.translations || {};
       // Follow the segmented control's order so both read the same.
-      const ordered = knownLanguages.filter(n => n !== "Source" && n in translations);
+      // Fall back to the payload's own order if the language list has not
+      // arrived yet, so translations are never silently dropped.
+      const known = knownLanguages.filter(n => n !== "Source" && n in translations);
+      const ordered = known.length ? known : Object.keys(translations);
       for (const name of ordered) {
         const text = translations[name];
         const tr = document.createElement("div");
@@ -551,15 +589,40 @@
       }
       return entry;
     }));
-    feed.scrollTop = feed.scrollHeight;
+    if (stuckToBottom) scrollToLatest(); else jump.classList.add("show");
   }
+
+  // Follow new lines automatically, unless the operator has scrolled up to
+  // read back - then offer a button instead of yanking the view.
+  const feedWrap = document.getElementById("feed-wrap");
+  const jump = document.getElementById("jump");
+  let stuckToBottom = true;
+
+  function atBottom() {
+    return feed.scrollHeight - feed.scrollTop - feed.clientHeight < 40;
+  }
+  function scrollToLatest() {
+    feed.scrollTop = feed.scrollHeight;
+    jump.classList.remove("show");
+  }
+  feed.addEventListener("scroll", () => {
+    stuckToBottom = atBottom();
+    if (stuckToBottom) jump.classList.remove("show");
+  });
+  jump.addEventListener("click", () => { stuckToBottom = true; scrollToLatest(); });
+
   async function pollLines() {
     try {
       const res = await fetch("/api/lines", {cache: "no-store"});
       const data = await res.json();
       if (active === null) { active = data.active; paintSegments(); }
       syncSegments(data.languages || []);
-      if (data.revision !== lastRevision) { lastRevision = data.revision; render(data.lines); }
+      if (data.revision !== lastRevision) {
+        render(data.lines);
+        // Only after a successful render: if render throws, the next poll
+        // must retry rather than treat this revision as already shown.
+        lastRevision = data.revision;
+      }
     } catch (err) {}
   }
 
@@ -602,6 +665,51 @@
     const current = parseInt(getComputedStyle(document.body).getPropertyValue("--left"), 10);
     if (current) setLeft(current);
   });
+
+  // ---- Language tiles ----
+  const compare = document.getElementById("compare");
+  let builtTiles = [];
+
+  function buildTiles(languages) {
+    if (languages.join("|") === builtTiles.join("|")) return;
+    builtTiles = languages.slice();
+    compare.replaceChildren(...languages.map(name => {
+      const tile = document.createElement("button");
+      tile.className = "tile"; tile.dataset.language = name;
+      tile.style.setProperty("--tile", colorFor(name));
+      tile.addEventListener("click", () => setActive(name));
+
+      const frame = document.createElement("div");
+      frame.className = "tile-frame";
+      const frameEl = document.createElement("iframe");
+      // Pinned per language, so every tile shows its own text side by side.
+      frameEl.src = `/display/${encodeURIComponent(name.toLowerCase())}?preview=1`;
+      frameEl.title = `${name} preview`;
+      frameEl.loading = "lazy";
+      frame.append(frameEl);
+
+      const bar = document.createElement("div");
+      bar.className = "tile-bar";
+      const swatch = document.createElement("span"); swatch.className = "tile-swatch";
+      const label = document.createElement("span");
+      label.className = "tile-name"; label.textContent = name;
+      const state = document.createElement("span"); state.className = "tile-state";
+      bar.append(swatch, label, state);
+
+      tile.append(frame, bar);
+      return tile;
+    }));
+    paintTiles();
+  }
+
+  function paintTiles() {
+    for (const tile of compare.children) {
+      const on = tile.dataset.language === active;
+      tile.setAttribute("aria-pressed", String(on));
+      const state = tile.querySelector(".tile-state");
+      if (state) state.textContent = on ? "on screen" : "";
+    }
+  }
 
   paintMute();
   loadTuning();
