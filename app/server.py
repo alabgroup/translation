@@ -16,6 +16,9 @@ app = Flask(__name__, template_folder=str(TEMPLATE_DIR),
 # rehearsal take effect on refresh, without restarting the pipeline.
 app.config["TEMPLATES_AUTO_RELOAD"] = True
 app.jinja_env.auto_reload = True
+# Preserve insertion order in JSON responses: sorted keys would list the
+# languages differently from the configured order the interface uses.
+app.json.sort_keys = False
 
 
 @app.route("/")

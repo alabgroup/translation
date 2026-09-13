@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ app_name }} — {{ tagline }}</title>
+<link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
 <style>
   /* The accent is a real animatable colour, so the interface eases between
      colourways when the operator changes language rather than snapping. */
@@ -545,7 +546,11 @@
       const src = document.createElement("div");
       src.className = "src"; src.textContent = line.source;
       entry.append(stamp, src);
-      for (const [name, text] of Object.entries(line.translations || {})) {
+      const translations = line.translations || {};
+      // Follow the segmented control's order so both read the same.
+      const ordered = knownLanguages.filter(n => n !== "Source" && n in translations);
+      for (const name of ordered) {
+        const text = translations[name];
         const tr = document.createElement("div");
         tr.className = name === active ? "tr live" : "tr";
         tr.style.setProperty("--tag", colorFor(name));

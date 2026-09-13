@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <!-- Same stops and positions as the input meter, left to right. -->
+    <linearGradient id="meter" x1="0" y1="0" x2="64" y2="0" gradientUnits="userSpaceOnUse">
+      <stop offset="0%"   stop-color="#5FB79A"/>
+      <stop offset="58%"  stop-color="#5FB79A"/>
+      <stop offset="80%"  stop-color="#E8B85A"/>
+      <stop offset="100%" stop-color="#E86A5A"/>
+    </linearGradient>
+  </defs>
+  <rect x="0" y="0" width="64" height="64" rx="15" fill="url(#meter)"/>
+</svg>
