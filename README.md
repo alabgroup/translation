@@ -80,10 +80,26 @@ virtual audio device and select that device:
 3. Run `python run.py --list-devices`, then
    `python run.py --device "BlackHole 2ch"`.
 
+## Control page
+
+`http://localhost:8000/` is split in two: controls on the left, a live preview of
+the OBS overlay on the right.
+
+- **On screen now** — pick the language the `/display/active` overlay shows.
+- **Audio input** — choose any Core Audio input, watch the level meter, and mute.
+  Switching inputs reopens the capture stream without restarting the pipeline;
+  muting stops transcription while leaving the meter running, so you can still
+  see the feed is alive.
+
 ## Configuration
 
 Settings live in `config.py`:
 
+- `INPUT_DEVICE` — input name (e.g. `"NDI Audio"`). Use a name, never an index:
+  Core Audio renumbers devices when hardware connects or disconnects. Stereo
+  inputs are downmixed to mono.
+- `TRANSLATION_FIXES` — per-language corrections applied after translation, for
+  words Argos reliably gets wrong (it renders "Amen." as "Ámen." in Portuguese).
 - `TARGET_LANGS` — display name → language code. Ships with Portuguese, Spanish
   and Chinese (Mandarin, simplified script). Every utterance is translated into
   all of them, so switching languages on the control page is instant. Add entries

@@ -4,132 +4,241 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Live translation</title>
+<link href="/static/fonts/lato.css" rel="stylesheet">
 <style>
-  :root { color-scheme: light dark; }
-  body {
-    margin: 0 auto;
-    padding: 2rem 1.5rem 3rem;
-    font: 16px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI",
-          "PingFang SC", "Hiragino Sans GB", sans-serif;
-    max-width: 52rem;
+  :root {
+    color-scheme: dark;
+    --bg: #14161a; --panel: #1c1f25; --line: #2c3039;
+    --text: #e8eaed; --dim: #9aa1ac; --accent: #3b82f6; --danger: #ef4444;
   }
-  h1 { font-size: 1.5rem; margin: 0 0 0.25rem; }
-  .sub { color: #6b7280; margin: 0 0 2rem; }
-  h2 { font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.06em;
-       color: #6b7280; margin: 2rem 0 0.6rem; }
-  a { color: #2563eb; }
-  code { background: rgba(127,127,127,0.14); padding: 0.1em 0.35em;
-         border-radius: 3px; font-size: 0.9em; }
-  ul { margin: 0; padding-left: 1.1rem; }
-  li { margin-bottom: 0.35rem; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; height: 100vh; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font: 14px/1.5 "Lato", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          "PingFang SC", sans-serif;
+    display: grid; grid-template-columns: 1fr 1fr;
+  }
+  /* Left: controls. Right: exactly what OBS shows. */
+  #controls { padding: 1.25rem; overflow-y: auto; border-right: 1px solid var(--line); }
+  #stage { padding: 1.25rem; display: flex; flex-direction: column; min-width: 0; }
+
+  h1 { font-size: 1.15rem; font-weight: 900; margin: 0 0 0.15rem; }
+  .sub { color: var(--dim); font-size: 0.82rem; margin: 0 0 1.25rem; }
+  h2 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
+       color: var(--dim); margin: 1.5rem 0 0.5rem; font-weight: 700; }
+  h2:first-of-type { margin-top: 0; }
+  code { background: #0e1013; padding: 0.15em 0.4em; border-radius: 3px;
+         font-size: 0.85em; color: #cbd5e1; }
+
+  .panel { background: var(--panel); border: 1px solid var(--line);
+           border-radius: 8px; padding: 0.85rem; }
 
   /* Language picker */
-  #languages { display: flex; flex-wrap: wrap; gap: 0.5rem; }
-  .lang-btn {
-    font: inherit;
-    padding: 0.5rem 1rem;
-    border: 1px solid rgba(127,127,127,0.4);
-    border-radius: 999px;
-    background: transparent;
-    color: inherit;
-    cursor: pointer;
-  }
-  .lang-btn:hover { border-color: #2563eb; }
-  .lang-btn[aria-pressed="true"] {
-    background: #2563eb;
-    border-color: #2563eb;
-    color: #fff;
-    font-weight: 600;
-  }
-  .hint { color: #6b7280; font-size: 0.85rem; margin: 0.6rem 0 0; }
+  #languages { display: flex; flex-wrap: wrap; gap: 0.4rem; }
+  .lang-btn { font: inherit; font-weight: 700; padding: 0.45rem 0.9rem;
+              border: 1px solid var(--line); border-radius: 999px;
+              background: transparent; color: var(--text); cursor: pointer; }
+  .lang-btn:hover { border-color: var(--accent); }
+  .lang-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
 
-  #feed {
-    border: 1px solid rgba(127,127,127,0.3);
-    border-radius: 8px;
-    padding: 1rem;
-    min-height: 6rem;
-    max-height: 26rem;
-    overflow-y: auto;
-  }
-  .entry { padding: 0.55rem 0; border-bottom: 1px solid rgba(127,127,127,0.16); }
+  /* Audio */
+  .row { display: flex; align-items: center; gap: 0.6rem; }
+  .row + .row { margin-top: 0.7rem; }
+  select { font: inherit; flex: 1; min-width: 0; padding: 0.4rem 0.5rem;
+           background: #0e1013; color: var(--text);
+           border: 1px solid var(--line); border-radius: 5px; }
+  .btn { font: inherit; font-weight: 700; padding: 0.4rem 0.85rem; cursor: pointer;
+         border: 1px solid var(--line); border-radius: 5px;
+         background: transparent; color: var(--text); white-space: nowrap; }
+  .btn.on { background: var(--danger); border-color: var(--danger); color: #fff; }
+
+  /* Meter: green normally, amber when hot, red when clipping. */
+  #meter { position: relative; flex: 1; height: 10px; border-radius: 5px;
+           background: #0e1013; overflow: hidden; }
+  #meter-fill { position: absolute; inset: 0 auto 0 0; width: 0%;
+                background: #22c55e; transition: width 80ms linear; }
+  #meter-fill.hot { background: #f59e0b; }
+  #meter-fill.clip { background: var(--danger); }
+  #meter.muted #meter-fill { background: #4b5563; }
+  .meter-label { font-size: 0.72rem; color: var(--dim); width: 6.5rem;
+                 font-variant-numeric: tabular-nums; }
+  .status { font-size: 0.78rem; color: var(--dim); margin-top: 0.6rem; }
+  .status.warn { color: #f59e0b; }
+
+  /* Preview: dark frame standing in for the video behind the overlay. */
+  #preview-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9;
+                  border: 1px solid var(--line); border-radius: 8px;
+                  overflow: hidden; background:
+                    repeating-conic-gradient(#23262c 0% 25%, #1a1d22 0% 50%) 50%/16px 16px; }
+  #preview { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+
+  /* Feed */
+  #feed { flex: 1; margin-top: 1rem; overflow-y: auto; min-height: 0;
+          border: 1px solid var(--line); border-radius: 8px;
+          background: var(--panel); padding: 0.85rem; }
+  .entry { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
   .entry:last-child { border-bottom: 0; }
-  .stamp { color: #9ca3af; font-size: 0.78rem; font-variant-numeric: tabular-nums; }
-  .src { font-weight: 600; }
-  .tr { color: #6b7280; }
-  .tr.live { color: #2563eb; font-weight: 600; }
-  .empty { color: #9ca3af; }
+  .stamp { color: #6b7280; font-size: 0.72rem; font-variant-numeric: tabular-nums; }
+  .src { font-weight: 700; }
+  .tr { color: var(--dim); font-size: 0.9rem; }
+  .tr.live { color: #60a5fa; font-weight: 700; }
+  .empty { color: #6b7280; }
 </style>
 </head>
 <body>
-  <h1>Live translation</h1>
-  <p class="sub">Whisper <code>{{ model }}</code> &rarr; Argos &rarr; OBS, running locally on port {{ port }}.</p>
+  <div id="controls">
+    <h1>Live translation</h1>
+    <p class="sub">Whisper <code>{{ model }}</code> &rarr; Argos &rarr; OBS, on port {{ port }}</p>
 
-  <h2>On screen now</h2>
-  <div id="languages"></div>
-  <p class="hint">
-    Changing this instantly switches the
-    <code>http://localhost:{{ port }}/display/active</code> overlay &mdash;
-    no need to touch OBS mid-service.
-  </p>
+    <h2>On screen now</h2>
+    <div id="languages"></div>
 
-  <h2>OBS browser source</h2>
-  <ul>
-    <li><strong>Use this one:</strong>
+    <h2>Audio input</h2>
+    <div class="panel">
+      <div class="row">
+        <select id="device"></select>
+        <button class="btn" id="mute" aria-pressed="false">Mute</button>
+      </div>
+      <div class="row">
+        <div id="meter"><div id="meter-fill"></div></div>
+        <span class="meter-label" id="meter-label">—</span>
+      </div>
+      <div class="status" id="audio-status"></div>
+    </div>
+
+    <h2>OBS browser source</h2>
+    <div class="panel">
       <code>http://localhost:{{ port }}/display/active</code>
-      &mdash; follows the selection above
-      (<a href="/display/active" target="_blank">preview</a>)</li>
-  </ul>
-  <p class="hint">Pinned to a single language instead, if you ever need it:</p>
-  <ul>
-    {% for language in languages %}
-    <li><a href="/display/{{ language.lower() }}" target="_blank">{{ language }}</a>
-      &mdash; <code>http://localhost:{{ port }}/display/{{ language.lower() }}</code></li>
-    {% endfor %}
-  </ul>
+      <div class="status">Follows the language selected above. Set the source to your
+        canvas size and leave it at 0,0 &mdash; the text occupies the left half.</div>
+    </div>
+  </div>
 
-  <h2>Live feed</h2>
-  <div id="feed"><span class="empty">Waiting for speech&hellip;</span></div>
+  <div id="stage">
+    <h2>Overlay preview</h2>
+    <div id="preview-wrap">
+      <iframe id="preview" src="/display/active" title="Overlay preview"></iframe>
+    </div>
+    <div id="feed"><span class="empty">Waiting for speech&hellip;</span></div>
+  </div>
 
 <script>
   const feed = document.getElementById("feed");
   const languageBar = document.getElementById("languages");
-  let lastRevision = -1;
-  let knownLanguages = [];
-  let active = null;
+  const deviceSelect = document.getElementById("device");
+  const muteBtn = document.getElementById("mute");
+  const meter = document.getElementById("meter");
+  const meterFill = document.getElementById("meter-fill");
+  const meterLabel = document.getElementById("meter-label");
+  const audioStatus = document.getElementById("audio-status");
 
+  let lastRevision = -1, knownLanguages = [], active = null;
+  let knownDevices = [], muted = false, quietSince = null;
+
+  // --- Language ---
   async function setActive(language) {
-    active = language;                       // Optimistic, so the click feels instant.
-    paintButtons();
+    active = language; paintButtons();
     try {
-      await fetch("/api/active", {
-        method: "POST",
+      await fetch("/api/active", {method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({language}),
-      });
-    } catch (err) { /* next poll re-syncs */ }
+        body: JSON.stringify({language})});
+    } catch (err) {}
   }
-
   function paintButtons() {
-    for (const button of languageBar.children) {
-      button.setAttribute("aria-pressed", String(button.dataset.language === active));
-    }
+    for (const b of languageBar.children)
+      b.setAttribute("aria-pressed", String(b.dataset.language === active));
   }
-
   function syncButtons(languages) {
     if (languages.join("|") !== knownLanguages.join("|")) {
       knownLanguages = languages;
       languageBar.replaceChildren(...languages.map(name => {
-        const button = document.createElement("button");
-        button.className = "lang-btn";
-        button.textContent = name;
-        button.dataset.language = name;
-        button.addEventListener("click", () => setActive(name));
-        return button;
+        const b = document.createElement("button");
+        b.className = "lang-btn"; b.textContent = name; b.dataset.language = name;
+        b.addEventListener("click", () => setActive(name));
+        return b;
       }));
     }
     paintButtons();
   }
 
+  // --- Audio ---
+  deviceSelect.addEventListener("change", async () => {
+    const device = deviceSelect.value;
+    audioStatus.textContent = "Switching input…";
+    try {
+      const res = await fetch("/api/audio", {method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({device})});
+      if (!res.ok) audioStatus.textContent = (await res.json()).error || "Could not switch input";
+    } catch (err) { audioStatus.textContent = "Could not reach the server"; }
+  });
+
+  muteBtn.addEventListener("click", async () => {
+    muted = !muted;
+    paintMute();
+    try {
+      await fetch("/api/audio", {method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({muted})});
+    } catch (err) {}
+  });
+
+  function paintMute() {
+    muteBtn.classList.toggle("on", muted);
+    muteBtn.textContent = muted ? "Muted" : "Mute";
+    muteBtn.setAttribute("aria-pressed", String(muted));
+    meter.classList.toggle("muted", muted);
+  }
+
+  function syncDevices(devices, current) {
+    const names = devices.map(d => d.name);
+    if (names.join("|") !== knownDevices.join("|")) {
+      knownDevices = names;
+      deviceSelect.replaceChildren(...devices.map(d => {
+        const o = document.createElement("option");
+        o.value = d.name;
+        o.textContent = `${d.name} (${d.channels} ch)`;
+        return o;
+      }));
+    }
+    // Match on substring, since the configured value may be a partial name.
+    const match = names.find(n => current && n.toLowerCase().includes(String(current).toLowerCase()));
+    if (document.activeElement !== deviceSelect && match) deviceSelect.value = match;
+  }
+
+  async function pollAudio() {
+    try {
+      const res = await fetch("/api/audio", {cache: "no-store"});
+      const data = await res.json();
+      syncDevices(data.devices || [], data.device);
+      if (data.muted !== muted) { muted = data.muted; paintMute(); }
+
+      // RMS is tiny for speech; map it onto a readable bar.
+      const level = data.level || 0;
+      const pct = Math.min(100, Math.round(Math.sqrt(level) * 320));
+      meterFill.style.width = pct + "%";
+      meterFill.className = pct > 92 ? "clip" : pct > 70 ? "hot" : "";
+      meterLabel.textContent = level > 0.0001
+        ? `${(20 * Math.log10(level)).toFixed(0)} dB` : "silent";
+
+      if (!muted && level < 0.001) {
+        quietSince = quietSince || Date.now();
+        const secs = Math.round((Date.now() - quietSince) / 1000);
+        if (secs >= 10) {
+          audioStatus.textContent = `No signal for ${secs}s — check the input.`;
+          audioStatus.className = "status warn";
+        }
+      } else {
+        quietSince = null;
+        if (audioStatus.className === "status warn" || audioStatus.textContent === "Switching input…") {
+          audioStatus.textContent = ""; audioStatus.className = "status";
+        }
+      }
+    } catch (err) {}
+  }
+
+  // --- Feed ---
   function render(lines) {
     if (!lines.length) {
       feed.replaceChildren(Object.assign(document.createElement("span"),
@@ -139,19 +248,13 @@
     feed.replaceChildren(...lines.map(line => {
       const entry = document.createElement("div");
       entry.className = "entry";
-
       const stamp = document.createElement("div");
-      stamp.className = "stamp";
-      stamp.textContent = line.time;
-
+      stamp.className = "stamp"; stamp.textContent = line.time;
       const src = document.createElement("div");
-      src.className = "src";
-      src.textContent = line.source;
-
+      src.className = "src"; src.textContent = line.source;
       entry.append(stamp, src);
       for (const [name, text] of Object.entries(line.translations || {})) {
         const tr = document.createElement("div");
-        // Highlight the language currently on screen.
         tr.className = name === active ? "tr live" : "tr";
         tr.textContent = `${name}: ${text}`;
         entry.append(tr);
@@ -161,21 +264,20 @@
     feed.scrollTop = feed.scrollHeight;
   }
 
-  async function poll() {
+  async function pollLines() {
     try {
       const res = await fetch("/api/lines", {cache: "no-store"});
       const data = await res.json();
       if (active === null) active = data.active;
       syncButtons(data.languages || []);
-      if (data.revision !== lastRevision) {
-        lastRevision = data.revision;
-        render(data.lines);
-      }
-    } catch (err) { /* retry on next tick */ }
+      if (data.revision !== lastRevision) { lastRevision = data.revision; render(data.lines); }
+    } catch (err) {}
   }
 
-  poll();
-  setInterval(poll, 500);
+  paintMute();
+  pollLines(); pollAudio();
+  setInterval(pollLines, 500);
+  setInterval(pollAudio, 150);   // Fast enough for the meter to feel live.
 </script>
 </body>
 </html>

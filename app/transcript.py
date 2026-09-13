@@ -7,13 +7,17 @@ from pathlib import Path
 
 import config
 
-OUTPUT_DIR = Path(__file__).resolve().parent.parent / "output"
+# Each run writes into its own timestamped folder. Appending to one shared file
+# would interleave the soundcheck with the service and restart cue numbering
+# partway through, leaving an .srt no player can read.
+OUTPUT_ROOT = Path(__file__).resolve().parent.parent / "output"
+OUTPUT_DIR = OUTPUT_ROOT / datetime.now().strftime("%Y%m%d-%H%M%S")
 
 _lock = threading.Lock()
 _lines = []          # Most recent lines, newest last.
 _revision = 0        # Bumped on every append so the display can poll cheaply.
 _srt_index = 1
-_started_at = None
+_last_end = 0.0      # End of the last cue written, to keep cues non-overlapping.
 
 # The language the /display/active overlay shows. Operators switch this from
 # the control page mid-service, so the OBS source URL never has to change.
@@ -44,28 +48,38 @@ def set_active_language(name):
 
 
 def _srt_timestamp(seconds):
+    # Clamp: a negative value formats as "-1:59:52,-394", which is not valid SRT.
+    seconds = max(0.0, seconds)
     whole = int(seconds)
-    millis = int((seconds - whole) * 1000)
+    millis = int(round((seconds - whole) * 1000))
+    if millis == 1000:          # Rounding can carry into the next second.
+        whole, millis = whole + 1, 0
     return f"{whole // 3600:02d}:{(whole % 3600) // 60:02d}:{whole % 60:02d},{millis:03d}"
 
 
 def _write_srt(name, text, start, end):
-    OUTPUT_DIR.mkdir(exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)   # output/ is gitignored, absent on a fresh clone
     path = OUTPUT_DIR / f"{name}.srt"
     with open(path, "a", encoding="utf-8") as srt:
         srt.write(f"{_srt_index}\n{_srt_timestamp(start)} --> {_srt_timestamp(end)}\n{text}\n\n")
 
 
-def add_line(source_text, translations, duration):
-    """Record one transcribed utterance and its translations."""
-    global _revision, _srt_index, _started_at
+def add_line(source_text, translations, start, end):
+    """Record one transcribed utterance and its translations.
+
+    `start` and `end` are positions on the audio capture timeline, supplied by
+    the capture layer. They are never derived from the clock at this point:
+    transcription latency would push every cue later than the audio it labels
+    and let cues overlap or go negative.
+    """
+    global _revision, _srt_index, _last_end
 
     with _lock:
-        now = time.time()
-        if _started_at is None:
-            _started_at = now - duration
-        start = now - duration - _started_at
-        end = now - _started_at
+        # Cues must not overlap, even if segmentation hands back a start that
+        # is just behind the previous end.
+        start = max(start, _last_end)
+        end = max(end, start + 0.001)
+        _last_end = end
 
         _lines.append({
             "time": datetime.now().strftime("%H:%M:%S"),

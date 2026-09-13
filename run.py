@@ -6,8 +6,10 @@ so the main thread can own the audio loop and handle Ctrl+C cleanly.
 """
 
 import argparse
+import signal
 import threading
 import time
+import traceback
 
 from waitress import serve
 
@@ -28,22 +30,31 @@ def start_server():
 
 
 def audio_loop(translator, stop_event):
-    """Transcribe and translate each utterance until interrupted."""
-    for chunk in audio.utterances(stop_event):
-        duration = len(chunk) / config.SAMPLE_RATE
-        started = time.time()
+    """Transcribe and translate each utterance until asked to stop.
 
-        text = transcribe.transcribe(chunk)
-        if not text:
-            continue
+    One bad utterance must never end the service. Every failure is logged and
+    skipped: the web server runs on a daemon thread, so an exception escaping
+    here would exit the process and freeze the OBS overlay on its last lines.
+    """
+    for chunk, start, end in audio.utterances(stop_event):
+        try:
+            duration = end - start
+            began = time.time()
 
-        translations = translator.translate(text)
-        transcript.add_line(text, translations, duration)
+            text = transcribe.transcribe(chunk)
+            if not text:
+                continue
 
-        print(f"\n[{duration:.1f}s audio, {time.time() - started:.1f}s processing]")
-        print(f"  {config.SOURCE_LANG}: {text}")
-        for name, translated in translations.items():
-            print(f"  {name}: {translated}")
+            translations = translator.translate(text)
+            transcript.add_line(text, translations, start, end)
+
+            print(f"\n[{duration:.1f}s audio, {time.time() - began:.1f}s processing]")
+            print(f"  {config.SOURCE_LANG}: {text}")
+            for name, translated in translations.items():
+                print(f"  {name}: {translated}")
+        except Exception:
+            print("\n[error] skipped one utterance:")
+            traceback.print_exc()
 
 
 def main():
@@ -83,12 +94,24 @@ def main():
     transcribe.load_model()
 
     stop_event = threading.Event()
-    print("\nListening. Speak into the selected input. Ctrl+C to stop.\n")
-    try:
-        audio_loop(translator, stop_event)
-    except KeyboardInterrupt:
+
+    # Handle Ctrl+C by setting the flag rather than raising. The capture loop
+    # then exits normally and flushes the sentence in progress; raising instead
+    # tears down the generator mid-yield and loses it.
+    def on_interrupt(_signum, _frame):
+        if stop_event.is_set():
+            print("\nForcing exit.")
+            raise SystemExit(1)
         stop_event.set()
-        print("\nStopped.")
+        print("\nStopping after the current phrase. Ctrl+C again to force quit.")
+
+    signal.signal(signal.SIGINT, on_interrupt)
+
+    print(f"Input device:  {audio.describe_device(config.INPUT_DEVICE)}")
+    print(f"Transcripts:   {transcript.OUTPUT_DIR}")
+    print("\nListening. Speak into the selected input. Ctrl+C to stop.\n")
+    audio_loop(translator, stop_event)
+    print("Stopped.")
 
 
 if __name__ == "__main__":
