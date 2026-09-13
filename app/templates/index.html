@@ -7,140 +7,296 @@
 <style>
   :root {
     color-scheme: dark;
-    --bg: #14161a; --panel: #1c1f25; --line: #2c3039;
-    --text: #e8eaed; --dim: #9aa1ac; --accent: #3b82f6; --danger: #ef4444;
+    /* Grounded in the platform dark palette: near-black canvas, raised
+       surfaces, hairline separators rather than drawn borders. */
+    --canvas:      #000000;
+    --surface:     #1c1c1e;
+    --surface-2:   #2c2c2e;
+    --surface-3:   #3a3a3c;
+    --separator:   rgba(84, 84, 88, 0.55);
+    --label:       #f5f5f7;
+    --label-2:     #a1a1a6;
+    --label-3:     #6e6e73;
+    --blue:        #0a84ff;
+    --green:       #30d158;
+    --orange:      #ff9f0a;
+    --red:         #ff453a;
+    --radius-lg: 14px;
+    --radius:    10px;
+    --radius-sm:  7px;
   }
   * { box-sizing: border-box; }
+  html, body { height: 100%; }
   body {
-    margin: 0; height: 100vh; overflow: hidden;
-    background: var(--bg); color: var(--text);
-    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI",
+    margin: 0;
+    overflow: hidden;
+    background: var(--canvas);
+    color: var(--label);
+    font: 13.5px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI",
           "PingFang SC", "Hiragino Sans GB", sans-serif;
-    display: grid; grid-template-columns: 1fr 1fr;
+    -webkit-font-smoothing: antialiased;
+    font-variant-numeric: tabular-nums;
+    display: grid;
+    grid-template-columns: minmax(320px, 400px) 1fr;
   }
-  /* Left: controls. Right: exactly what OBS shows. */
-  #controls { padding: 1.25rem; overflow-y: auto; border-right: 1px solid var(--line); }
-  #stage { padding: 1.25rem; display: flex; flex-direction: column; min-width: 0; }
 
-  h1 { font-size: 1.15rem; font-weight: 900; margin: 0 0 0.15rem; }
-  .sub { color: var(--dim); font-size: 0.82rem; margin: 0 0 1.25rem; }
-  h2 { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.08em;
-       color: var(--dim); margin: 1.5rem 0 0.5rem; font-weight: 700; }
-  h2:first-of-type { margin-top: 0; }
-  code { background: #0e1013; padding: 0.15em 0.4em; border-radius: 3px;
-         font-size: 0.85em; color: #cbd5e1; }
+  /* ---- Structure ---- */
+  #controls {
+    padding: 22px 20px 40px;
+    overflow-y: auto;
+    background: var(--canvas);
+    border-right: 1px solid var(--separator);
+  }
+  #stage {
+    padding: 22px 24px 24px;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    gap: 14px;
+  }
 
-  .panel { background: var(--panel); border: 1px solid var(--line);
-           border-radius: 8px; padding: 0.85rem; }
+  header { margin-bottom: 22px; }
+  h1 {
+    font-size: 19px; font-weight: 600; letter-spacing: -0.022em;
+    margin: 0 0 3px;
+  }
+  .sub { color: var(--label-3); font-size: 12px; margin: 0; letter-spacing: -0.005em; }
 
-  /* Language picker */
-  #languages { display: flex; flex-wrap: wrap; gap: 0.4rem; }
-  .lang-btn { font: inherit; font-weight: 700; padding: 0.45rem 0.9rem;
-              border: 1px solid var(--line); border-radius: 999px;
-              background: transparent; color: var(--text); cursor: pointer; }
-  .lang-btn:hover { border-color: var(--accent); }
-  .lang-btn[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+  .section { margin-top: 24px; }
+  .section:first-of-type { margin-top: 0; }
+  .section-title {
+    font-size: 11px; font-weight: 590; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--label-3);
+    margin: 0 0 9px 2px;
+  }
 
-  /* Audio */
-  .row { display: flex; align-items: center; gap: 0.6rem; }
-  .row + .row { margin-top: 0.7rem; }
-  select { font: inherit; flex: 1; min-width: 0; padding: 0.4rem 0.5rem;
-           background: #0e1013; color: var(--text);
-           border: 1px solid var(--line); border-radius: 5px; }
-  .btn { font: inherit; font-weight: 700; padding: 0.4rem 0.85rem; cursor: pointer;
-         border: 1px solid var(--line); border-radius: 5px;
-         background: transparent; color: var(--text); white-space: nowrap; }
-  .btn.on { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .card {
+    background: var(--surface);
+    border-radius: var(--radius-lg);
+    padding: 14px;
+  }
+  .card + .card { margin-top: 10px; }
 
-  /* Meter: green normally, amber when hot, red when clipping. */
-  #meter { position: relative; flex: 1; height: 10px; border-radius: 5px;
-           background: #0e1013; overflow: hidden; }
-  #meter-fill { position: absolute; inset: 0 auto 0 0; width: 0%;
-                background: #22c55e; transition: width 80ms linear; }
-  #meter-fill.hot { background: #f59e0b; }
-  #meter-fill.clip { background: var(--danger); }
-  #meter.muted #meter-fill { background: #4b5563; }
-  .meter-label { font-size: 0.72rem; color: var(--dim); width: 6.5rem;
-                 font-variant-numeric: tabular-nums; }
-  .status { font-size: 0.78rem; color: var(--dim); margin-top: 0.6rem; }
+  /* ---- Segmented control ---- */
+  #languages {
+    display: flex; gap: 2px; padding: 2px;
+    background: var(--surface-2); border-radius: 9px;
+  }
+  .seg {
+    flex: 1; font: inherit; font-size: 12.5px; font-weight: 510;
+    letter-spacing: -0.01em;
+    padding: 6px 4px; border: 0; border-radius: 7px; cursor: pointer;
+    background: transparent; color: var(--label-2);
+    transition: background 140ms ease, color 140ms ease;
+    white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .seg:hover { color: var(--label); }
+  .seg[aria-pressed="true"] {
+    background: var(--surface-3); color: var(--label); font-weight: 600;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.5), 0 0 0 0.5px rgba(255,255,255,0.06);
+  }
 
-  /* Tuning sliders */
-  .tune + .tune { margin-top: 0.85rem; padding-top: 0.85rem;
-                  border-top: 1px solid var(--line); }
-  .tune-head { display: flex; justify-content: space-between;
-               align-items: baseline; gap: 0.5rem; }
-  .tune-label { font-size: 0.82rem; font-weight: 700; }
-  .tune-value { font-size: 0.8rem; color: #60a5fa;
-                font-variant-numeric: tabular-nums; white-space: nowrap; }
-  .tune-help { font-size: 0.72rem; color: var(--dim); margin-top: 0.15rem; }
-  input[type=range] { width: 100%; margin: 0.35rem 0 0; accent-color: var(--accent); }
-  #reset { margin-top: 0.85rem; }
-  .status.warn { color: #f59e0b; }
+  /* ---- Rows ---- */
+  .row { display: flex; align-items: center; gap: 10px; }
+  .row + .row { margin-top: 12px; }
+  .row-label { font-size: 13px; color: var(--label); flex: 1; }
 
-  /* Preview: black behind the overlay so the subtitle panel and the area
-     beside it read as one surface. The iframe needs its own background -
-     the overlay document is transparent, and an iframe with a transparent
-     document still paints the browser's default white canvas underneath. */
-  #preview-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9;
-                  border: 1px solid var(--line); border-radius: 8px;
-                  overflow: hidden; background: #000; }
-  #preview { position: absolute; inset: 0; width: 100%; height: 100%;
-             border: 0; background: #000; color-scheme: dark; }
+  select {
+    font: inherit; font-size: 12.5px; flex: 1; min-width: 0;
+    padding: 7px 9px; color: var(--label);
+    background: var(--surface-2);
+    border: 0.5px solid var(--separator); border-radius: var(--radius-sm);
+    appearance: none;
+    background-image:
+      linear-gradient(45deg, transparent 50%, var(--label-2) 50%),
+      linear-gradient(135deg, var(--label-2) 50%, transparent 50%);
+    background-position: calc(100% - 15px) 52%, calc(100% - 10px) 52%;
+    background-size: 5px 5px, 5px 5px;
+    background-repeat: no-repeat;
+    padding-right: 28px;
+  }
+  select:focus-visible { outline: 2px solid var(--blue); outline-offset: 1px; }
 
-  /* Feed */
-  #feed { flex: 1; margin-top: 1rem; overflow-y: auto; min-height: 0;
-          border: 1px solid var(--line); border-radius: 8px;
-          background: var(--panel); padding: 0.85rem; }
-  .entry { padding: 0.5rem 0; border-bottom: 1px solid var(--line); }
+  /* ---- Switch ---- */
+  .switch {
+    position: relative; width: 44px; height: 26px; flex: none;
+    border: 0; border-radius: 999px; cursor: pointer; padding: 0;
+    background: var(--surface-3);
+    transition: background 200ms ease;
+  }
+  .switch::after {
+    content: ""; position: absolute; top: 2px; left: 2px;
+    width: 22px; height: 22px; border-radius: 50%; background: #fff;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.4);
+    transition: transform 200ms cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  .switch[aria-pressed="true"] { background: var(--red); }
+  .switch[aria-pressed="true"]::after { transform: translateX(18px); }
+
+  /* ---- Meter ---- */
+  .meter-row { display: flex; align-items: center; gap: 10px; }
+  #meter {
+    position: relative; flex: 1; height: 6px; border-radius: 3px;
+    background: var(--surface-2); overflow: hidden;
+  }
+  #meter-fill {
+    position: absolute; inset: 0 auto 0 0; width: 0%;
+    border-radius: 3px; background: var(--green);
+    transition: width 90ms linear, background 200ms ease;
+  }
+  #meter-fill.hot  { background: var(--orange); }
+  #meter-fill.clip { background: var(--red); }
+  #meter.muted #meter-fill { background: var(--label-3); }
+  .meter-label {
+    font-size: 11px; color: var(--label-3); width: 52px; text-align: right;
+  }
+  .note { font-size: 11.5px; color: var(--label-3); margin-top: 10px; line-height: 1.45; }
+  .note.warn { color: var(--orange); }
+
+  /* ---- Sliders ---- */
+  .tune + .tune { margin-top: 15px; }
+  .tune-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+  .tune-label { font-size: 12.5px; color: var(--label); letter-spacing: -0.008em; }
+  .tune-value { font-size: 11.5px; color: var(--label-2); white-space: nowrap; }
+  .tune-help { font-size: 11px; color: var(--label-3); margin-top: 3px; line-height: 1.4; }
+  input[type=range] {
+    width: 100%; margin: 7px 0 0; height: 4px; appearance: none;
+    background: var(--surface-2); border-radius: 2px; cursor: pointer;
+  }
+  input[type=range]::-webkit-slider-thumb {
+    appearance: none; width: 15px; height: 15px; border-radius: 50%;
+    background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,0.5);
+  }
+  input[type=range]:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+
+  .btn {
+    font: inherit; font-size: 12.5px; font-weight: 510;
+    padding: 7px 13px; cursor: pointer;
+    border: 0.5px solid var(--separator); border-radius: var(--radius-sm);
+    background: var(--surface-2); color: var(--label);
+    transition: background 140ms ease;
+  }
+  .btn:hover { background: var(--surface-3); }
+  #reset { margin-top: 16px; width: 100%; }
+
+  /* ---- OBS URL ---- */
+  .url-row { display: flex; align-items: center; gap: 8px; }
+  .url {
+    flex: 1; min-width: 0; font-size: 11.5px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--label-2); background: var(--surface-2);
+    padding: 7px 9px; border-radius: var(--radius-sm);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
+  /* ---- Stage ---- */
+  .stage-head { display: flex; align-items: center; justify-content: space-between; }
+  .live { display: flex; align-items: center; gap: 6px; font-size: 11px; color: var(--label-3); }
+  .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--label-3); }
+  .dot.on { background: var(--green); animation: pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  #preview-wrap {
+    position: relative; width: 100%; aspect-ratio: 16 / 9;
+    border-radius: var(--radius); overflow: hidden;
+    background: #000;
+    box-shadow: 0 0 0 0.5px var(--separator), 0 12px 32px rgba(0,0,0,0.55);
+  }
+  /* The overlay document is transparent, and a transparent iframe document
+     still paints the browser's default white canvas underneath. */
+  #preview {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    border: 0; background: #000; color-scheme: dark;
+  }
+
+  #feed {
+    flex: 1; min-height: 0; overflow-y: auto;
+    background: var(--surface); border-radius: var(--radius-lg);
+    padding: 4px 16px;
+  }
+  .entry { padding: 12px 0; border-bottom: 0.5px solid var(--separator); }
   .entry:last-child { border-bottom: 0; }
-  .stamp { color: #6b7280; font-size: 0.72rem; font-variant-numeric: tabular-nums; }
-  .src { font-weight: 700; }
-  .tr { color: var(--dim); font-size: 0.9rem; }
-  .tr.live { color: #60a5fa; font-weight: 700; }
-  .empty { color: #6b7280; }
+  .stamp { color: var(--label-3); font-size: 10.5px; letter-spacing: 0.02em; }
+  .src { font-size: 14px; font-weight: 590; letter-spacing: -0.012em; margin-top: 2px; }
+  .tr { color: var(--label-2); font-size: 13px; margin-top: 3px; }
+  .tr.live { color: var(--label); }
+  .tr .tag {
+    color: var(--label-3); font-size: 10.5px; text-transform: uppercase;
+    letter-spacing: 0.05em; margin-right: 6px;
+  }
+  .tr.live .tag { color: var(--blue); }
+  .empty {
+    color: var(--label-3); font-size: 13px;
+    display: flex; align-items: center; justify-content: center; height: 100%;
+    min-height: 120px;
+  }
+
+  ::-webkit-scrollbar { width: 9px; }
+  ::-webkit-scrollbar-thumb {
+    background: var(--surface-3); border-radius: 5px;
+    border: 2px solid var(--canvas);
+  }
+  ::-webkit-scrollbar-track { background: transparent; }
 </style>
 </head>
 <body>
   <div id="controls">
-    <h1>Live translation</h1>
-    <p class="sub">Whisper <code>{{ model }}</code> &rarr; Argos &rarr; OBS, on port {{ port }}</p>
+    <header>
+      <h1>Live translation</h1>
+      <p class="sub">Whisper {{ model }} &middot; Argos &middot; port {{ port }}</p>
+    </header>
 
-    <h2>On screen now</h2>
-    <div id="languages"></div>
-
-    <h2>Audio input</h2>
-    <div class="panel">
-      <div class="row">
-        <select id="device"></select>
-        <button class="btn" id="mute" aria-pressed="false">Mute</button>
-      </div>
-      <div class="row">
-        <div id="meter"><div id="meter-fill"></div></div>
-        <span class="meter-label" id="meter-label">—</span>
-      </div>
-      <div class="status" id="audio-status"></div>
+    <div class="section">
+      <p class="section-title">On screen</p>
+      <div id="languages"></div>
     </div>
 
-    <h2>Tuning</h2>
-    <div class="panel">
-      <div id="tuning"></div>
-      <button class="btn" id="reset">Reset to defaults</button>
+    <div class="section">
+      <p class="section-title">Audio input</p>
+      <div class="card">
+        <div class="row"><select id="device"></select></div>
+        <div class="row meter-row">
+          <div id="meter"><div id="meter-fill"></div></div>
+          <span class="meter-label" id="meter-label">—</span>
+        </div>
+        <div class="row">
+          <span class="row-label">Mute</span>
+          <button class="switch" id="mute" aria-pressed="false" aria-label="Mute input"></button>
+        </div>
+        <div class="note" id="audio-note" hidden></div>
+      </div>
     </div>
 
-    <h2>OBS browser source</h2>
-    <div class="panel">
-      <code>http://localhost:{{ port }}/display/active</code>
-      <div class="status">Follows the language selected above. Set the source to your
-        canvas size and leave it at 0,0 &mdash; the text occupies the left half.</div>
+    <div class="section">
+      <p class="section-title">Tuning</p>
+      <div class="card">
+        <div id="tuning"></div>
+        <button class="btn" id="reset">Reset to defaults</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <p class="section-title">OBS browser source</p>
+      <div class="card">
+        <div class="url-row">
+          <span class="url" id="obs-url">http://localhost:{{ port }}/display/active</span>
+          <button class="btn" id="copy">Copy</button>
+        </div>
+        <p class="note">Follows the language selected above. Set the source to your
+           canvas size and leave it at 0,0 — the panel occupies the left half.</p>
+      </div>
     </div>
   </div>
 
   <div id="stage">
-    <h2>Overlay preview</h2>
+    <div class="stage-head">
+      <p class="section-title" style="margin:0">Overlay preview</p>
+      <span class="live"><span class="dot" id="live-dot"></span><span id="live-text">idle</span></span>
+    </div>
     <div id="preview-wrap">
       <iframe id="preview" src="/display/active" title="Overlay preview"></iframe>
     </div>
-    <div id="feed"><span class="empty">Waiting for speech&hellip;</span></div>
+    <div id="feed"><div class="empty">Waiting for speech…</div></div>
   </div>
 
 <script>
@@ -151,62 +307,65 @@
   const meter = document.getElementById("meter");
   const meterFill = document.getElementById("meter-fill");
   const meterLabel = document.getElementById("meter-label");
-  const audioStatus = document.getElementById("audio-status");
+  const audioNote = document.getElementById("audio-note");
+  const liveDot = document.getElementById("live-dot");
+  const liveText = document.getElementById("live-text");
 
   let lastRevision = -1, knownLanguages = [], active = null;
   let knownDevices = [], muted = false, quietSince = null;
 
-  // --- Language ---
+  // ---- Language ----
   async function setActive(language) {
-    active = language; paintButtons();
+    active = language; paintSegments();
     try {
       await fetch("/api/active", {method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({language})});
     } catch (err) {}
   }
-  function paintButtons() {
+  function paintSegments() {
     for (const b of languageBar.children)
       b.setAttribute("aria-pressed", String(b.dataset.language === active));
   }
-  function syncButtons(languages) {
+  function syncSegments(languages) {
     if (languages.join("|") !== knownLanguages.join("|")) {
       knownLanguages = languages;
       languageBar.replaceChildren(...languages.map(name => {
         const b = document.createElement("button");
-        b.className = "lang-btn"; b.textContent = name; b.dataset.language = name;
+        b.className = "seg"; b.textContent = name; b.dataset.language = name;
         b.addEventListener("click", () => setActive(name));
         return b;
       }));
     }
-    paintButtons();
+    paintSegments();
   }
 
-  // --- Audio ---
+  // ---- Audio ----
+  function setNote(text, warn) {
+    audioNote.hidden = !text;
+    audioNote.textContent = text || "";
+    audioNote.className = warn ? "note warn" : "note";
+  }
+
   deviceSelect.addEventListener("change", async () => {
-    const device = deviceSelect.value;
-    audioStatus.textContent = "Switching input…";
+    setNote("Switching input…", false);
     try {
       const res = await fetch("/api/audio", {method: "POST",
         headers: {"Content-Type": "application/json"},
-        body: JSON.stringify({device})});
-      if (!res.ok) audioStatus.textContent = (await res.json()).error || "Could not switch input";
-    } catch (err) { audioStatus.textContent = "Could not reach the server"; }
+        body: JSON.stringify({device: deviceSelect.value})});
+      setNote(res.ok ? "" : ((await res.json()).error || "Could not switch input"), !res.ok);
+    } catch (err) { setNote("Could not reach the server", true); }
   });
 
   muteBtn.addEventListener("click", async () => {
-    muted = !muted;
-    paintMute();
+    muted = !muted; paintMute();
     try {
       await fetch("/api/audio", {method: "POST",
         headers: {"Content-Type": "application/json"},
         body: JSON.stringify({muted})});
     } catch (err) {}
   });
-
   function paintMute() {
-    muteBtn.classList.toggle("on", muted);
-    muteBtn.textContent = muted ? "Muted" : "Mute";
     muteBtn.setAttribute("aria-pressed", String(muted));
     meter.classList.toggle("muted", muted);
   }
@@ -218,12 +377,13 @@
       deviceSelect.replaceChildren(...devices.map(d => {
         const o = document.createElement("option");
         o.value = d.name;
-        o.textContent = `${d.name} (${d.channels} ch)`;
+        o.textContent = `${d.name} · ${d.channels} ch`;
         return o;
       }));
     }
-    // Match on substring, since the configured value may be a partial name.
-    const match = names.find(n => current && n.toLowerCase().includes(String(current).toLowerCase()));
+    // Match on substring: the configured value may be a partial name.
+    const match = names.find(n => current &&
+      n.toLowerCase().includes(String(current).toLowerCase()));
     if (document.activeElement !== deviceSelect && match) deviceSelect.value = match;
   }
 
@@ -234,7 +394,7 @@
       syncDevices(data.devices || [], data.device);
       if (data.muted !== muted) { muted = data.muted; paintMute(); }
 
-      // RMS is tiny for speech; map it onto a readable bar.
+      // RMS is tiny for speech; sqrt maps it onto a readable bar.
       const level = data.level || 0;
       const pct = Math.min(100, Math.round(Math.sqrt(level) * 320));
       meterFill.style.width = pct + "%";
@@ -242,32 +402,28 @@
       meterLabel.textContent = level > 0.0001
         ? `${(20 * Math.log10(level)).toFixed(0)} dB` : "silent";
 
+      const hasSignal = !muted && level > 0.001;
+      liveDot.classList.toggle("on", hasSignal);
+      liveText.textContent = muted ? "muted" : hasSignal ? "listening" : "idle";
+
       if (!muted && level < 0.001) {
         quietSince = quietSince || Date.now();
         const secs = Math.round((Date.now() - quietSince) / 1000);
-        if (secs >= 10) {
-          audioStatus.textContent = `No signal for ${secs}s — check the input.`;
-          audioStatus.className = "status warn";
-        }
+        if (secs >= 10) setNote(`No signal for ${secs}s — check the input.`, true);
       } else {
         quietSince = null;
-        if (audioStatus.className === "status warn" || audioStatus.textContent === "Switching input…") {
-          audioStatus.textContent = ""; audioStatus.className = "status";
-        }
+        if (audioNote.classList.contains("warn")) setNote("", false);
       }
     } catch (err) {}
   }
 
-  // --- Tuning ---
+  // ---- Tuning ----
   const tuning = document.getElementById("tuning");
   let defaults = null;
-  let building = false;
 
   function buildTuning(spec) {
-    if (defaults === null) {
+    if (defaults === null)
       defaults = Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, v.value]));
-    }
-    building = true;
     tuning.replaceChildren(...Object.entries(spec).map(([name, s]) => {
       const wrap = document.createElement("div");
       wrap.className = "tune";
@@ -284,8 +440,7 @@
       const input = document.createElement("input");
       Object.assign(input, {type: "range", min: s.min, max: s.max,
                             step: s.step, value: s.value});
-      input.dataset.name = name;
-      // Decimals to show, inferred from the step so 0.001 does not read as "0".
+      // Decimals inferred from the step, so 0.001 does not render as "0".
       const places = (String(s.step).split(".")[1] || "").length;
       const paint = () => value.textContent =
         `${Number(input.value).toFixed(places)}${s.unit ? " " + s.unit : ""}`;
@@ -301,7 +456,6 @@
       }
       return wrap;
     }));
-    building = false;
   }
 
   async function send(changes) {
@@ -315,8 +469,7 @@
   document.getElementById("reset").addEventListener("click", async () => {
     if (!defaults) return;
     await send(defaults);
-    const spec = await (await fetch("/api/settings", {cache: "no-store"})).json();
-    buildTuning(spec);
+    buildTuning(await (await fetch("/api/settings", {cache: "no-store"})).json());
   });
 
   async function loadTuning() {
@@ -326,10 +479,20 @@
     } catch (err) {}
   }
 
-  // --- Feed ---
+  // ---- Copy ----
+  const copyBtn = document.getElementById("copy");
+  copyBtn.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(document.getElementById("obs-url").textContent);
+      copyBtn.textContent = "Copied";
+      setTimeout(() => copyBtn.textContent = "Copy", 1400);
+    } catch (err) { copyBtn.textContent = "Copy failed"; }
+  });
+
+  // ---- Feed ----
   function render(lines) {
     if (!lines.length) {
-      feed.replaceChildren(Object.assign(document.createElement("span"),
+      feed.replaceChildren(Object.assign(document.createElement("div"),
         {className: "empty", textContent: "Waiting for speech…"}));
       return;
     }
@@ -344,7 +507,9 @@
       for (const [name, text] of Object.entries(line.translations || {})) {
         const tr = document.createElement("div");
         tr.className = name === active ? "tr live" : "tr";
-        tr.textContent = `${name}: ${text}`;
+        const tag = document.createElement("span");
+        tag.className = "tag"; tag.textContent = name;
+        tr.append(tag, document.createTextNode(text));
         entry.append(tr);
       }
       return entry;
@@ -357,7 +522,7 @@
       const res = await fetch("/api/lines", {cache: "no-store"});
       const data = await res.json();
       if (active === null) active = data.active;
-      syncButtons(data.languages || []);
+      syncSegments(data.languages || []);
       if (data.revision !== lastRevision) { lastRevision = data.revision; render(data.lines); }
     } catch (err) {}
   }
@@ -366,7 +531,7 @@
   loadTuning();
   pollLines(); pollAudio();
   setInterval(pollLines, 500);
-  setInterval(pollAudio, 150);   // Fast enough for the meter to feel live.
+  setInterval(pollAudio, 150);
 </script>
 </body>
 </html>

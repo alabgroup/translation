@@ -75,7 +75,7 @@ PORT = 8000
 # Set to 0 to leave the last lines on screen indefinitely.
 CLEAR_SUBTITLES_AFTER_SECONDS = 12
 VISIBLE_LINES = 8    # How many recent lines the overlay shows at once.
-FONT_SIZE_VH = 3.1   # Overlay text size, in percent of canvas height.
+FONT_SIZE_VH = 4.4   # Overlay text size, in percent of canvas height.
 
 # --- Output ---
 WRITE_SRT = True           # Write transcript/translation .srt files next to the app.
