@@ -91,6 +91,30 @@ the OBS overlay on the right.
   muting stops transcription while leaving the meter running, so you can still
   see the feed is alive.
 
+## Tuning during a service
+
+The control page carries sliders for the settings worth adjusting against a real
+room. They apply immediately - the capture loop re-reads them every 100 ms block
+and the overlay picks them up on its next poll, so nothing restarts.
+
+| Slider | Effect |
+| --- | --- |
+| Pause before a phrase ends | The main latency dial. Shorter reacts faster but chops sentences mid-clause, and Argos translates fragments noticeably worse |
+| Silence threshold | Set just above the room's noise floor, watching the meter. Too low and phrases never finalize; too high and quiet speech is cut off |
+| Shortest phrase kept | Lower to catch short responses. "Amen" alone is roughly 0.4 s of speech |
+| Longest phrase before a forced cut | Caps worst-case delay for a speaker who does not pause |
+| Lines on the overlay | How much history stays on screen |
+| Clear overlay after silence | 0 leaves the last lines up indefinitely |
+| Text size | Overlay text, in percent of canvas height |
+
+Note that the pause length and the shortest-phrase setting interact: trailing
+silence is buffered into the utterance, so the speech itself only needs to clear
+(shortest phrase - pause) to survive. Shortening the pause quietly raises the bar
+for what counts as a real phrase.
+
+Bounds are enforced server-side. Anything outside this list - the Whisper model,
+the language set - needs a restart.
+
 ## Configuration
 
 Settings live in `config.py`:

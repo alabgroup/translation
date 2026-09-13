@@ -64,6 +64,18 @@
   .meter-label { font-size: 0.72rem; color: var(--dim); width: 6.5rem;
                  font-variant-numeric: tabular-nums; }
   .status { font-size: 0.78rem; color: var(--dim); margin-top: 0.6rem; }
+
+  /* Tuning sliders */
+  .tune + .tune { margin-top: 0.85rem; padding-top: 0.85rem;
+                  border-top: 1px solid var(--line); }
+  .tune-head { display: flex; justify-content: space-between;
+               align-items: baseline; gap: 0.5rem; }
+  .tune-label { font-size: 0.82rem; font-weight: 700; }
+  .tune-value { font-size: 0.8rem; color: #60a5fa;
+                font-variant-numeric: tabular-nums; white-space: nowrap; }
+  .tune-help { font-size: 0.72rem; color: var(--dim); margin-top: 0.15rem; }
+  input[type=range] { width: 100%; margin: 0.35rem 0 0; accent-color: var(--accent); }
+  #reset { margin-top: 0.85rem; }
   .status.warn { color: #f59e0b; }
 
   /* Preview: dark frame standing in for the video behind the overlay. */
@@ -105,6 +117,12 @@
         <span class="meter-label" id="meter-label">—</span>
       </div>
       <div class="status" id="audio-status"></div>
+    </div>
+
+    <h2>Tuning</h2>
+    <div class="panel">
+      <div id="tuning"></div>
+      <button class="btn" id="reset">Reset to defaults</button>
     </div>
 
     <h2>OBS browser source</h2>
@@ -238,6 +256,74 @@
     } catch (err) {}
   }
 
+  // --- Tuning ---
+  const tuning = document.getElementById("tuning");
+  let defaults = null;
+  let building = false;
+
+  function buildTuning(spec) {
+    if (defaults === null) {
+      defaults = Object.fromEntries(Object.entries(spec).map(([k, v]) => [k, v.value]));
+    }
+    building = true;
+    tuning.replaceChildren(...Object.entries(spec).map(([name, s]) => {
+      const wrap = document.createElement("div");
+      wrap.className = "tune";
+
+      const head = document.createElement("div");
+      head.className = "tune-head";
+      const label = document.createElement("span");
+      label.className = "tune-label"; label.textContent = s.label;
+      const value = document.createElement("span");
+      value.className = "tune-value";
+      head.append(label, value);
+      wrap.append(head);
+
+      const input = document.createElement("input");
+      Object.assign(input, {type: "range", min: s.min, max: s.max,
+                            step: s.step, value: s.value});
+      input.dataset.name = name;
+      // Decimals to show, inferred from the step so 0.001 does not read as "0".
+      const places = (String(s.step).split(".")[1] || "").length;
+      const paint = () => value.textContent =
+        `${Number(input.value).toFixed(places)}${s.unit ? " " + s.unit : ""}`;
+      paint();
+      input.addEventListener("input", paint);
+      input.addEventListener("change", () => send({[name]: input.value}));
+      wrap.append(input);
+
+      if (s.help) {
+        const help = document.createElement("div");
+        help.className = "tune-help"; help.textContent = s.help;
+        wrap.append(help);
+      }
+      return wrap;
+    }));
+    building = false;
+  }
+
+  async function send(changes) {
+    try {
+      await fetch("/api/settings", {method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify(changes)});
+    } catch (err) {}
+  }
+
+  document.getElementById("reset").addEventListener("click", async () => {
+    if (!defaults) return;
+    await send(defaults);
+    const spec = await (await fetch("/api/settings", {cache: "no-store"})).json();
+    buildTuning(spec);
+  });
+
+  async function loadTuning() {
+    try {
+      const spec = await (await fetch("/api/settings", {cache: "no-store"})).json();
+      if (!tuning.childElementCount) buildTuning(spec);
+    } catch (err) {}
+  }
+
   // --- Feed ---
   function render(lines) {
     if (!lines.length) {
@@ -275,6 +361,7 @@
   }
 
   paintMute();
+  loadTuning();
   pollLines(); pollAudio();
   setInterval(pollLines, 500);
   setInterval(pollAudio, 150);   // Fast enough for the meter to feel live.

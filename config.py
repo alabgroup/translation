@@ -29,6 +29,31 @@ TARGET_LANGS = {
     "Chinese": "zh",
 }
 
+# --- Live-tunable settings ---
+# Exposed as sliders on the control page and changed while the service runs.
+# Bounds are enforced server-side; anything not listed here needs a restart.
+TUNABLE = {
+    "SILENCE_SECONDS": dict(
+        label="Pause before a phrase ends", unit="s", min=0.2, max=2.5, step=0.05,
+        help="Shorter reacts faster but chops sentences, which translates worse."),
+    "SILENCE_RMS": dict(
+        label="Silence threshold", unit="", min=0.001, max=0.08, step=0.001,
+        help="Set just above the room's noise floor. Watch the meter."),
+    "MIN_UTTERANCE_SECONDS": dict(
+        label="Shortest phrase kept", unit="s", min=0.2, max=3.0, step=0.1,
+        help="Lower this to catch short responses like 'Amen'."),
+    "MAX_UTTERANCE_SECONDS": dict(
+        label="Longest phrase before a forced cut", unit="s", min=3, max=30, step=1,
+        help="Caps the worst-case delay for a speaker who never pauses."),
+    "VISIBLE_LINES": dict(
+        label="Lines on the overlay", unit="", min=1, max=12, step=1),
+    "CLEAR_SUBTITLES_AFTER_SECONDS": dict(
+        label="Clear overlay after silence", unit="s", min=0, max=120, step=1,
+        help="0 leaves the last lines on screen indefinitely."),
+    "FONT_SIZE_VH": dict(
+        label="Text size", unit="vh", min=1.5, max=8.0, step=0.1),
+}
+
 # --- Translation corrections ---
 # Argos gets a few high-frequency words wrong, and in a service they are the
 # ones said most. Each entry is (pattern, replacement) applied to that
@@ -49,7 +74,8 @@ PORT = 8000
 # Clear subtitles from the overlay after this many seconds with no new speech.
 # Set to 0 to leave the last lines on screen indefinitely.
 CLEAR_SUBTITLES_AFTER_SECONDS = 12
-VISIBLE_LINES = 8   # How many recent lines the overlay shows at once.
+VISIBLE_LINES = 8    # How many recent lines the overlay shows at once.
+FONT_SIZE_VH = 3.1   # Overlay text size, in percent of canvas height.
 
 # --- Output ---
 WRITE_SRT = True           # Write transcript/translation .srt files next to the app.

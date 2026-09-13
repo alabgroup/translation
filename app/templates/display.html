@@ -5,7 +5,8 @@
 <title>{{ language }} subtitles</title>
 <link href="/static/fonts/lato.css" rel="stylesheet">
 <style>
-  /* Transparent background so OBS composites this over the video feed. */
+  /* The page itself stays transparent so the right half of the canvas shows
+     the video feed. Only the subtitle panel paints a background. */
   html, body {
     margin: 0;
     height: 100%;
@@ -28,6 +29,7 @@
     align-items: flex-start;
     gap: 0.35em;
     overflow: hidden;
+    background: #000;
     /* CJK faces follow Lato so Chinese renders with real glyphs - Lato has no
        Chinese coverage and would otherwise fall back to boxes. */
     font-family: "Lato", "Helvetica Neue", Helvetica, Arial,
@@ -37,12 +39,8 @@
     line-height: 1.3;
     text-align: left;
     color: #fff;
-    text-shadow: 0 2px 6px rgba(0, 0, 0, 0.9), 0 0 2px rgba(0, 0, 0, 0.9);
   }
   .line {
-    background: rgba(0, 0, 0, 0.55);
-    padding: 0.2em 0.6em;
-    border-radius: 0.3em;
     max-width: 100%;
     animation: fade-in 220ms ease-out;
   }
@@ -80,10 +78,10 @@
   // "active" means follow whatever the control page selected.
   const PINNED = {{ language | tojson }};
   const FOLLOW_ACTIVE = PINNED === "active";
-  const VISIBLE_LINES = {{ visible_lines }};
-  // Clear the overlay after a pause, so the last thing said does not stay
-  // burned over the rest of the service.
-  const CLEAR_AFTER_MS = {{ clear_after_seconds * 1000 }};
+  // Display settings arrive with each poll, so the control page can change
+  // them mid-service without a reload.
+  let visibleLines = 8;
+  let clearAfterMs = 12000;
 
   const container = document.getElementById("subtitles");
   const select = document.getElementById("language-select");
@@ -96,7 +94,7 @@
   }
 
   function render(lines, language) {
-    const recent = lines.slice(-VISIBLE_LINES);
+    const recent = lines.slice(-visibleLines);
     const nodes = recent.map((line, i) => {
       const div = document.createElement("div");
       div.className = i < recent.length - 1 ? "line older" : "line newest";
@@ -145,14 +143,23 @@
       const data = await res.json();
       const language = FOLLOW_ACTIVE ? data.active : currentLanguage;
       syncPicker(data.languages || [], language);
+
+      const s = data.settings || {};
+      if (s.FONT_SIZE_VH) container.style.fontSize = s.FONT_SIZE_VH + "vh";
+      if (s.VISIBLE_LINES && s.VISIBLE_LINES !== visibleLines) {
+        visibleLines = s.VISIBLE_LINES;
+        render(data.lines, language);       // Re-render at the new line count.
+      }
+      if (s.CLEAR_SUBTITLES_AFTER_SECONDS !== undefined)
+        clearAfterMs = s.CLEAR_SUBTITLES_AFTER_SECONDS * 1000;
       if (data.revision !== lastRevision || language !== currentLanguage) {
         lastRevision = data.revision;
         currentLanguage = language;
         lastChangeAt = Date.now();
         render(data.lines, language);
-      } else if (CLEAR_AFTER_MS > 0
+      } else if (clearAfterMs > 0
                  && container.childElementCount
-                 && Date.now() - lastChangeAt > CLEAR_AFTER_MS) {
+                 && Date.now() - lastChangeAt > clearAfterMs) {
         container.replaceChildren();
       }
     } catch (err) {

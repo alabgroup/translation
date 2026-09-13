@@ -158,11 +158,6 @@ def _capture(device, stop_event):
         callback=on_audio,
     )
 
-    # round(), not int(): int(0.7 / 0.1) is 6, silently cutting utterances
-    # a block earlier than configured.
-    silence_blocks_needed = round(config.SILENCE_SECONDS / config.BLOCK_SECONDS)
-    min_frames = int(config.MIN_UTTERANCE_SECONDS * config.SAMPLE_RATE)
-    max_frames = int(config.MAX_UTTERANCE_SECONDS * config.SAMPLE_RATE)
     silent_timeouts_before_warning = int(config.NO_AUDIO_WARN_SECONDS / 0.25)
 
     buffered = []
@@ -205,6 +200,13 @@ def _capture(device, stop_event):
                 print(f"[audio] {overflows - reported_overflows} input overflow(s)")
                 reported_overflows = overflows
 
+            # Re-read each block: these are live-tunable from the control page.
+            # round(), not int(): int(0.7 / 0.1) is 6, which would cut
+            # utterances a block earlier than configured.
+            silence_blocks_needed = round(config.SILENCE_SECONDS / config.BLOCK_SECONDS)
+            min_frames = int(config.MIN_UTTERANCE_SECONDS * config.SAMPLE_RATE)
+            max_frames = int(config.MAX_UTTERANCE_SECONDS * config.SAMPLE_RATE)
+
             captured_frames += len(block)
             rms = float(np.sqrt(np.mean(block ** 2)))
             _record_level(rms)       # Meter keeps moving even while muted, so
@@ -238,5 +240,5 @@ def _capture(device, stop_event):
     # block and outside any finally: yielding during generator teardown raises
     # "generator ignored GeneratorExit".
     _record_level(0.0)
-    if buffered_frames >= min_frames:
+    if buffered_frames >= int(config.MIN_UTTERANCE_SECONDS * config.SAMPLE_RATE):
         yield finish()
