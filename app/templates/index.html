@@ -77,12 +77,15 @@
   #reset { margin-top: 0.85rem; }
   .status.warn { color: #f59e0b; }
 
-  /* Preview: dark frame standing in for the video behind the overlay. */
+  /* Preview: black behind the overlay so the subtitle panel and the area
+     beside it read as one surface. The iframe needs its own background -
+     the overlay document is transparent, and an iframe with a transparent
+     document still paints the browser's default white canvas underneath. */
   #preview-wrap { position: relative; width: 100%; aspect-ratio: 16 / 9;
                   border: 1px solid var(--line); border-radius: 8px;
-                  overflow: hidden; background:
-                    repeating-conic-gradient(#23262c 0% 25%, #1a1d22 0% 50%) 50%/16px 16px; }
-  #preview { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+                  overflow: hidden; background: #000; }
+  #preview { position: absolute; inset: 0; width: 100%; height: 100%;
+             border: 0; background: #000; color-scheme: dark; }
 
   /* Feed */
   #feed { flex: 1; margin-top: 1rem; overflow-y: auto; min-height: 0;
