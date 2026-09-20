@@ -14,9 +14,9 @@ import traceback
 from waitress import serve
 
 import config
-from app import audio, transcribe, transcript
+from app import audio, autoscale, transcribe, transcript
 from app.sentences import SentenceBuffer
-from app.server import app
+from app.server import app, set_test_translator
 from app.translate import Translator
 
 
@@ -105,6 +105,7 @@ def main():
         return
 
     translator = Translator().install_missing_packages()
+    set_test_translator(translator)
     transcribe.load_model()
 
     stop_event = threading.Event()
@@ -126,6 +127,7 @@ def main():
     print("\nListening. Speak into the selected input. Ctrl+C to stop.\n")
     sentences = SentenceBuffer(make_emitter(translator))
     sentences.watch(stop_event)
+    autoscale.watch(stop_event)
     audio_loop(sentences, stop_event)
     sentences.flush()          # whatever was mid-sentence when we stopped
     audio.close_recording()

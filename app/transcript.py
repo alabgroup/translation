@@ -116,6 +116,12 @@ def add_line(source_text, translations, start, end):
     global _revision, _srt_index, _last_end
 
     with _lock:
+        # Measured against the real, pre-clamp start: a pause long enough to
+        # read as a paragraph break on the overlay, not just a breath between
+        # clauses. Skipped for the very first line - there's nothing to break
+        # from yet, and _last_end (0.0) would otherwise read as a huge gap.
+        paragraph_break = bool(_lines) and (start - _last_end) >= config.PARAGRAPH_GAP_SECONDS
+
         # Cues must not overlap, even if segmentation hands back a start that
         # is just behind the previous end.
         start = max(start, _last_end)
@@ -127,6 +133,7 @@ def add_line(source_text, translations, start, end):
             "time": datetime.now().strftime("%H:%M:%S"),
             "source": source_text,
             "translations": translations,
+            "paragraph_break": paragraph_break,
         })
         del _lines[:-MAX_LINES]
         _revision += 1
@@ -139,6 +146,14 @@ def add_line(source_text, translations, start, end):
                 _write_txt(name, text)
             _write_jsonl(source_text, translations, start, end)
             _srt_index += 1
+
+
+def clear_lines():
+    """Wipe the in-memory feed, for clearing test content off the overlay."""
+    global _revision
+    with _lock:
+        _lines.clear()
+        _revision += 1
 
 
 def snapshot():

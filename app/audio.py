@@ -232,6 +232,7 @@ def _capture(device, stop_event):
             silence_blocks_needed = round(config.SILENCE_SECONDS / config.BLOCK_SECONDS)
             min_frames = int(config.MIN_UTTERANCE_SECONDS * config.SAMPLE_RATE)
             max_frames = int(config.MAX_UTTERANCE_SECONDS * config.SAMPLE_RATE)
+            hard_max_frames = max_frames + int(config.MAX_UTTERANCE_GRACE_SECONDS * config.SAMPLE_RATE)
 
             captured_frames += len(block)
 
@@ -263,7 +264,19 @@ def _capture(device, stop_event):
             buffered_frames += len(block)
             trailing_silence = trailing_silence + 1 if rms < config.SILENCE_RMS else 0
 
-            if trailing_silence >= silence_blocks_needed or buffered_frames >= max_frames:
+            # Past max_frames, a hard cutoff would slice through the middle
+            # of whatever word is being spoken - it operates on raw audio,
+            # before anything is transcribed, so it has no idea where word
+            # boundaries are. Instead, once over the target length, cut on
+            # the next silent block: even a brief gap between words. The
+            # hard ceiling still guarantees termination for a speaker who
+            # never pauses at all.
+            should_cut = (
+                trailing_silence >= silence_blocks_needed
+                or (buffered_frames >= max_frames and trailing_silence >= 1)
+                or buffered_frames >= hard_max_frames
+            )
+            if should_cut:
                 if buffered_frames >= min_frames:
                     yield finish()
                 buffered, buffered_frames, trailing_silence = [], 0, 0

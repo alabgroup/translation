@@ -334,7 +334,7 @@
   <div id="controls">
     <header>
       <div class="mark"><span class="glyph"></span><h1>{{ app_name }}</h1></div>
-      <p class="sub">{{ tagline }} · whisper {{ model }} · port {{ port }}</p>
+      <p class="sub">{{ tagline }} · whisper <span id="active-model">{{ model }}</span> · port {{ port }}</p>
     </header>
 
     <div class="section">
@@ -359,10 +359,35 @@
     </div>
 
     <div class="section">
+      <p class="section-title">Adaptive quality</p>
+      <div class="card">
+        <div class="row">
+          <span class="row-label">Auto-lower model under CPU load</span>
+          <button class="switch" id="autoscale-toggle" aria-pressed="true" aria-label="Toggle adaptive model sizing"></button>
+        </div>
+        <p class="note" id="autoscale-note">Steps whisper down (then back up to
+           <b id="autoscale-ceiling">{{ model }}</b>) if this machine falls behind live.</p>
+      </div>
+    </div>
+
+    <div class="section">
       <p class="section-title">Tuning</p>
       <div class="card">
         <div id="tuning"></div>
         <button class="btn" id="reset">Reset to defaults</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <p class="section-title">Test content</p>
+      <div class="card">
+        <div class="row">
+          <span class="row-label">Show a test verse on screen</span>
+          <button class="switch" id="test-toggle" aria-pressed="false" aria-label="Toggle test content"></button>
+        </div>
+        <p class="note">Pushes one line through the real translator, bypassing the
+           microphone — for checking OBS is picking up the overlay. Temporary; not
+           part of a real service.</p>
       </div>
     </div>
 
@@ -446,6 +471,38 @@
     }
     paintSegments();
     buildTiles(languages);
+  }
+
+  // ---- Adaptive quality ----
+  const autoscaleToggle = document.getElementById("autoscale-toggle");
+  const autoscaleNote = document.getElementById("autoscale-note");
+  const activeModelLabel = document.getElementById("active-model");
+  let autoscaleEnabled = true;   // matches the server's own default until the first poll lands
+  autoscaleToggle.setAttribute("aria-pressed", "true");
+
+  autoscaleToggle.addEventListener("click", async () => {
+    autoscaleEnabled = !autoscaleEnabled;
+    autoscaleToggle.setAttribute("aria-pressed", String(autoscaleEnabled));
+    try {
+      await fetch("/api/autoscale", {method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({enabled: autoscaleEnabled})});
+    } catch (err) {}
+  });
+
+  async function pollAutoscale() {
+    try {
+      const res = await fetch("/api/autoscale", {cache: "no-store"});
+      const s = await res.json();
+      if (document.activeElement !== autoscaleToggle) {
+        autoscaleEnabled = s.enabled;
+        autoscaleToggle.setAttribute("aria-pressed", String(s.enabled));
+      }
+      if (s.model) activeModelLabel.textContent = s.model;
+      autoscaleNote.innerHTML = s.model && s.model !== s.ceiling
+        ? `Currently running <b>${s.model}</b> — CPU is high, will return to <b>${s.ceiling}</b> once it calms down.`
+        : `Steps whisper down (then back up to <b>${s.ceiling || activeModelLabel.textContent}</b>) if this machine falls behind live.`;
+    } catch (err) {}
   }
 
   // ---- Audio ----
@@ -564,6 +621,24 @@
       if (!tuning.childElementCount) buildTuning(spec);
     } catch (err) {}
   }
+
+  // ---- Test content ----
+  const TEST_VERSE = "For God so loved the world that he gave his one and only Son.";
+  const testToggle = document.getElementById("test-toggle");
+  let testOn = false;
+  testToggle.addEventListener("click", async () => {
+    testOn = !testOn;
+    testToggle.setAttribute("aria-pressed", String(testOn));
+    try {
+      if (testOn) {
+        await fetch("/api/test-line", {method: "POST",
+          headers: {"Content-Type": "application/json"},
+          body: JSON.stringify({text: TEST_VERSE})});
+      } else {
+        await fetch("/api/test-clear", {method: "POST"});
+      }
+    } catch (err) {}
+  });
 
   // ---- Copy ----
   const copyBtn = document.getElementById("copy");
@@ -807,9 +882,10 @@
 
   paintMute();
   loadTuning();
-  pollLines(); pollAudio();
+  pollLines(); pollAudio(); pollAutoscale();
   setInterval(pollLines, 500);
   setInterval(pollAudio, 150);
+  setInterval(pollAutoscale, 4000);
 </script>
 </body>
 </html>

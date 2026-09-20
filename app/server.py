@@ -1,11 +1,21 @@
 """Flask app serving the OBS overlay pages and the live transcript API."""
 
+import time
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, abort
 
 import config
-from app import audio, settings, transcript
+from app import audio, autoscale, settings, transcript
+
+# Set from run.py once the translator has finished loading, so /api/test-line
+# can push a manual line through the real pipeline without a microphone.
+_test_translator = None
+
+
+def set_test_translator(translator):
+    global _test_translator
+    _test_translator = translator
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -117,6 +127,43 @@ def api_set_audio():
     if not changed:
         return jsonify({"error": "nothing to change"}), 400
     return jsonify(changed)
+
+
+@app.route("/api/autoscale")
+def api_autoscale():
+    """Whether adaptive model sizing is on, and its current state."""
+    return jsonify(autoscale.status())
+
+
+@app.route("/api/autoscale", methods=["POST"])
+def api_set_autoscale():
+    payload = request.get_json(silent=True) or {}
+    if "enabled" not in payload:
+        return jsonify({"error": "missing 'enabled'"}), 400
+    autoscale.set_enabled(payload["enabled"])
+    return jsonify(autoscale.status())
+
+
+@app.route("/api/test-line", methods=["POST"])
+def api_test_line():
+    """Push one line through the real translator, bypassing the microphone."""
+    if _test_translator is None:
+        return jsonify({"error": "translator not ready yet"}), 503
+    payload = request.get_json(silent=True) or {}
+    text = (payload.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "missing 'text'"}), 400
+    translations = _test_translator.translate(text)
+    now = time.time()
+    transcript.add_line(text, translations, now, now + 1)
+    return jsonify({"source": text, "translations": translations})
+
+
+@app.route("/api/test-clear", methods=["POST"])
+def api_test_clear():
+    """Wipe the feed and overlay, undoing /api/test-line."""
+    transcript.clear_lines()
+    return jsonify({"cleared": True})
 
 
 @app.route("/health")

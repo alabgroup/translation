@@ -16,6 +16,11 @@ the complete phrase, translates it, and pushes it to the browser overlay pages.
 
 ## Setup (macOS)
 
+Setting up on a brand new laptop with nothing installed yet (no Homebrew, no
+git)? See [docs/laptop-setup.md](docs/laptop-setup.md) for the full
+from-scratch walkthrough, including two gotchas that aren't obvious from the
+steps below.
+
 Requires Homebrew Python 3.11 and PortAudio.
 
 ```bash

@@ -64,7 +64,13 @@
   .line {
     max-width: 100%;
     animation: fade-in 220ms ease-out;
+    /* The older/newest crossfade. The slide-up itself is a Web Animation
+       (see script), not a transition - a transition needs the browser to
+       paint the "before" state first, which isn't guaranteed inside one
+       synchronous render pass. */
+    transition: opacity 320ms ease;
   }
+  .line.gap-before { margin-top: 1.15em; }
   /* Older lines recede so the newest is easiest to read. */
   .line.older { opacity: 0.52; font-weight: 500; }
   .line.newest { opacity: 1; }
@@ -122,32 +128,68 @@
 
   function render(lines, language) {
     const recent = lines.slice(-visibleLines)
-      .map(line => ({id: line.id, text: textFor(line, language) || ""}))
+      .map(line => ({id: line.id, text: textFor(line, language) || "", gap: !!line.paragraph_break}))
       .filter(line => line.text);
 
+    // Record where every currently-rendered line sits before anything
+    // changes, so the "push up" from a new line can be animated instead of
+    // letting the flex layout jump straight to its new position.
+    const firstRects = new Map();
+    for (const node of container.children) firstRects.set(node, node.getBoundingClientRect());
+
     const next = new Map();
+    const seen = new Set();
     const nodes = recent.map((line, i) => {
       let node = rendered.get(line.id);
-      if (!node) {
+      const isNew = !node;
+      if (isNew) {
         node = document.createElement("div");
-        node.className = "line newest";     // animates in, once
         node.textContent = line.text;
       } else if (node.textContent !== line.text) {
         // Same line, different language: swap the text without re-animating.
         node.textContent = line.text;
       }
-      const wanted = i < recent.length - 1 ? "line older" : "line newest";
+      // A long pause before this line reads as a paragraph break - extra
+      // space instead of stacking it flush against unrelated speech.
+      const wanted = (i < recent.length - 1 ? "line older" : "line newest")
+        + (line.gap ? " gap-before" : "");
       if (node.className !== wanted) node.className = wanted;
       next.set(line.id, node);
+      seen.add(node);
       return node;
     });
 
-    // Only touch the DOM if the set or order actually changed.
+    // Only touch the DOM for lines that actually enter or leave. Existing
+    // nodes keep their identity - removing and reinserting them (the old
+    // replaceChildren approach) restarts their fade-in animation, which is
+    // what made every new line flash the whole panel instead of just itself.
     const current = [...container.children];
     const same = current.length === nodes.length
       && current.every((node, i) => node === nodes[i]);
-    if (!same) container.replaceChildren(...nodes);
+    if (!same) {
+      for (const node of current) if (!seen.has(node)) node.remove();
+      for (const node of nodes) if (node.parentNode !== container) container.appendChild(node);
+    }
     rendered = next;
+
+    // Slide persisted lines from their old position to the new one. This
+    // uses the Web Animations API rather than a CSS transition, because a
+    // transition needs the browser to actually paint the "before" position
+    // first - not guaranteed inside one synchronous render pass, and in
+    // practice it never painted it, so lines jumped instead of sliding.
+    // animate() takes explicit start/end keyframes, so it always plays.
+    for (const node of nodes) {
+      const first = firstRects.get(node);
+      if (!first) continue;   // brand new - its own fade-in handles this instead
+      const last = node.getBoundingClientRect();
+      const delta = first.top - last.top;
+      if (Math.abs(delta) > 0.5) {
+        node.animate(
+          [{transform: `translateY(${delta}px)`}, {transform: "none"}],
+          {duration: 320, easing: "ease-out"},
+        );
+      }
+    }
 
     // The panel is bottom-anchored with overflow hidden, so anything taller
     // than the canvas gets sliced through the middle of the oldest line.
