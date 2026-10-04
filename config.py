@@ -13,11 +13,28 @@ SILENCE_RMS = 0.010        # Below this RMS a block counts as silence.
 SILENCE_SECONDS = 0.7      # Silence needed to close an utterance.
 MIN_UTTERANCE_SECONDS = 1.0
 MAX_UTTERANCE_SECONDS = 12.0
+# Past MAX_UTTERANCE_SECONDS, wait for the next word gap instead of cutting
+# instantly - the hard cutoff used to slice through the middle of a word.
+# This bounds how much longer that can take before cutting anyway.
+MAX_UTTERANCE_GRACE_SECONDS = 3.0
 
 # --- Transcription ---
 WHISPER_MODEL = "small"    # tiny | base | small | medium | large-v3
 WHISPER_COMPUTE = "int8"   # int8 is the fast CPU default on Apple silicon.
 SOURCE_LANG = "en"
+
+# --- Adaptive model scaling ---
+# Whisper shares the machine with other live, CPU-bound software (OBS, a
+# presentation app). Under sustained pressure it can transcribe slower than
+# real time, and the service falls further and further behind. Trading
+# WHISPER_MODEL down for speed keeps it live; this never escalates past that
+# configured size - it is a ceiling, not a target to scale up to.
+AUTOSCALE_MODEL = True             # Operators can flip this live from the control page.
+CPU_CHECK_SECONDS = 10
+CPU_DOWNGRADE_LOAD_PER_CORE = 2.5  # Sustained load above this: step the model down.
+CPU_UPGRADE_LOAD_PER_CORE = 1.2    # Sustained load below this: step back up.
+CPU_DOWNGRADE_SUSTAINED_CHECKS = 2 # ~20s of real trouble before reacting.
+CPU_UPGRADE_SUSTAINED_CHECKS = 6   # ~60s of calm before trusting it is over.
 
 # --- Sentence assembly ---
 # A speaker who pauses mid-sentence for effect would otherwise have the
@@ -51,6 +68,12 @@ HALLUCINATION_PHRASES = {
     "the end", "subtitles by the amara.org community", "music", "applause",
     "silence", "beep", "blank_audio",
 }
+
+# --- Overlay formatting ---
+# A silence at least this long between two utterances reads as a paragraph
+# break on screen - an extra blank line, instead of stacking unrelated
+# sentences with no visual seam between them.
+PARAGRAPH_GAP_SECONDS = 3.0
 
 # --- Translation ---
 # Display name -> target language code, used by the translator and the display page.

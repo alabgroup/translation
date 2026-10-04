@@ -1,12 +1,27 @@
 """Flask app serving the OBS overlay pages and the live transcript API."""
 
 import threading
+import time
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, abort
 
 import config
-from app import audio, settings, transcript
+from app import audio, autoscale, settings, transcript
+
+# Set from run.py once the translator has finished loading. Used by the
+# language manager and by /api/test-line, which pushes a manual line through
+# the real pipeline without a microphone.
+_translator = None
+
+
+def set_translator(translator):
+    global _translator
+    _translator = translator
+
+
+# Kept so anything still importing the old name keeps working.
+set_test_translator = set_translator
 
 TEMPLATE_DIR = Path(__file__).resolve().parent / "templates"
 STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -173,6 +188,41 @@ def api_add_language():
     threading.Thread(target=_translator.add_language, args=(name, code),
                      daemon=True, name=f"install-{code}").start()
     return jsonify({"adding": name, "code": code}), 202
+@app.route("/api/autoscale")
+def api_autoscale():
+    """Whether adaptive model sizing is on, and its current state."""
+    return jsonify(autoscale.status())
+
+
+@app.route("/api/autoscale", methods=["POST"])
+def api_set_autoscale():
+    payload = request.get_json(silent=True) or {}
+    if "enabled" not in payload:
+        return jsonify({"error": "missing 'enabled'"}), 400
+    autoscale.set_enabled(payload["enabled"])
+    return jsonify(autoscale.status())
+
+
+@app.route("/api/test-line", methods=["POST"])
+def api_test_line():
+    """Push one line through the real translator, bypassing the microphone."""
+    if _translator is None:
+        return jsonify({"error": "translator not ready yet"}), 503
+    payload = request.get_json(silent=True) or {}
+    text = (payload.get("text") or "").strip()
+    if not text:
+        return jsonify({"error": "missing 'text'"}), 400
+    translations = _translator.translate(text)
+    now = time.time()
+    transcript.add_line(text, translations, now, now + 1)
+    return jsonify({"source": text, "translations": translations})
+
+
+@app.route("/api/test-clear", methods=["POST"])
+def api_test_clear():
+    """Wipe the feed and overlay, undoing /api/test-line."""
+    transcript.clear_lines()
+    return jsonify({"cleared": True})
 
 
 @app.route("/health")
