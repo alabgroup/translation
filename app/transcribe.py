@@ -11,6 +11,7 @@ os.environ.setdefault("HF_HUB_DISABLE_XET", "1")
 from faster_whisper import WhisperModel
 
 import config
+from app.corrections import fix_names
 
 _lock = threading.Lock()
 _model = None
@@ -80,4 +81,8 @@ def transcribe(audio):
     joined = " ".join(kept).strip()
     # A stock phrase is only a hallucination when it is the entire utterance;
     # "thank you" inside a real sentence is fine.
-    return "" if not joined or _is_hallucination(joined) else joined
+    if not joined or _is_hallucination(joined):
+        return ""
+    # Fix misheard names before anything downstream sees the text, so the
+    # transcript, every translation and the .srt files all agree.
+    return fix_names(joined)

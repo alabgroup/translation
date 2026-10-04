@@ -49,10 +49,26 @@ MAX_MERGED_WORDS = 60        # Never let a merged sentence grow past this.
 # Biases Whisper toward names and terms it would otherwise mishear. This is a
 # prompt, not training: cheap, immediate, and it costs nothing at runtime.
 WHISPER_VOCABULARY = (
-    "Alabaster Group. Scripture readings from Matthew, Mark, Luke, John, "
-    "Romans, Corinthians, Ephesians, Philippians, Psalms, Isaiah, Genesis, "
-    "Revelation. Amen. Hallelujah. Jesus Christ. Gospel. Congregation."
+    "Alabaster Group. A sermon reading from the Bible. Matthew, Mark, Luke, "
+    "John, Acts, Romans, Corinthians, Galatians, Ephesians, Philippians, "
+    "Colossians, Thessalonians, Timothy, Hebrews, James, Peter, Revelation, "
+    "Genesis, Exodus, Psalms, Proverbs, Isaiah, Jeremiah, Daniel, Israel, "
+    "David, Jerusalem, Jesus, Judah, Moses, Egypt, Christ, Jews, Jacob, "
+    "Saul, Aaron, Babylon, Solomon, Pharaoh, Levites, Abraham, Philistines, "
+    "Joseph, Joshua, Jonathan, Jordan, Samuel, Zion, Ephraim, Moab, "
+    "Benjamin, Paul, Judas, Simon, Sabbath, Isaac, Manasseh, Joab, Meeting, "
+    "Nebuchadnezzar, Gilead, Hezekiah, Gentiles, Samaria, Assyria, Esther, "
+    "Mordecai, Beth. Amen. Hallelujah. Gospel. Congregation. Scripture."
 )
+
+
+# --- Biblical name correction ---
+# Whisper mishears names it rarely encounters. Corrects only words Whisper
+# itself capitalised mid-sentence and that are not ordinary English, so it
+# cannot reach into normal speech. Names come from the public-domain World
+# English Bible and match any translation read from the pulpit.
+CORRECT_BIBLE_NAMES = True
+NAME_MATCH_CUTOFF = 0.84     # Higher is stricter. Below ~0.8 it over-corrects.
 
 # --- Hallucination filtering ---
 # Whisper invents stock phrases when handed silence or non-speech noise.

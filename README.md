@@ -215,6 +215,39 @@ ones.
 otherwise mishear. It is a prompt, not training — free at runtime, and the first
 thing to reach for when a specific name comes out wrong.
 
+## Biblical names
+
+Whisper mishears names it rarely encounters — "Colossians" as "Colassians",
+"Habakkuk" as "Habakuk". Two layers address this:
+
+- `WHISPER_VOCABULARY` biases transcription toward the names actually spoken,
+  using the most frequent ones in the corpus. A prompt, not training.
+- `app/corrections.py` repairs what still comes through wrong, matching against
+  1,342 proper nouns in `app/data/bible_names.txt`.
+
+Correction is deliberately narrow: only a word Whisper itself **capitalised**,
+longer than three letters, and unlike any ordinary English word is considered.
+Whisper capitalising a word is its own signal that it believes the word is a
+name, so ordinary speech is never touched — "marry" is left alone while "Mary"
+is checked. `NAME_MATCH_CUTOFF` controls strictness; below about 0.8 it
+over-corrects.
+
+The list is extracted from the **World English Bible**, which is public domain.
+Proper-noun spellings barely differ between translations, so it serves a
+congregation reading ESV or NIV — neither of which can be redistributed.
+Regenerate it with:
+
+```bash
+curl -o /tmp/web.zip https://ebible.org/Scriptures/eng-web_readaloud.zip
+unzip -q /tmp/web.zip -d /tmp/web
+python scripts/build_bible_names.py /tmp/web
+```
+
+Names are separated from poetry capitalisation by how often a word appears
+lowercase: a proper noun essentially never does, while "Therefore" and "Because"
+constantly do. A dictionary cannot make that distinction — it lists "israel" and
+"jesus" as words like any other.
+
 ## Evaluating accuracy
 
 `eval.py` measures how much accuracy the live pipeline gives up for speed. It
