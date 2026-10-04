@@ -45,6 +45,9 @@
     align-items: flex-start;
     gap: 0.35em;
     overflow: hidden;
+    /* Blanking fades rather than snaps: an instant cut to black during a long
+       pause reads as a fault, while a slow fade reads as intentional. */
+    transition: opacity 1400ms ease;
     /* Fade the topmost line into the panel over roughly one line, so lines
        dissolve as they age out instead of ending on a hard edge. */
     -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 1.5em);
@@ -61,6 +64,7 @@
     text-align: left;
     color: #fff;
   }
+  #subtitles.fading { opacity: 0; }
   .line {
     max-width: 100%;
     animation: fade-in 220ms ease-out;
@@ -126,7 +130,30 @@
   // flickering. Only genuinely new lines are created and animated.
   let rendered = new Map();   // line id -> element
 
+  // Fade out, then empty. Speech arriving mid-fade cancels it, so a late
+  // sentence never lands on a half-faded panel.
+  let fadeTimer = null;
+
+  function startFade() {
+    container.classList.add("fading");
+    fadeTimer = setTimeout(() => {
+      container.replaceChildren();
+      rendered = new Map();
+      container.classList.remove("fading");
+      fadeTimer = null;
+    }, 1400);
+  }
+
+  function cancelFade() {
+    if (fadeTimer !== null) {
+      clearTimeout(fadeTimer);
+      fadeTimer = null;
+    }
+    container.classList.remove("fading");
+  }
+
   function render(lines, language) {
+    cancelFade();
     const recent = lines.slice(-visibleLines)
       .map(line => ({id: line.id, text: textFor(line, language) || "", gap: !!line.paragraph_break}))
       .filter(line => line.text);
@@ -265,9 +292,9 @@
         render(data.lines, language);
       } else if (clearAfterMs > 0
                  && container.childElementCount
+                 && !container.classList.contains("fading")
                  && Date.now() - lastChangeAt > clearAfterMs) {
-        container.replaceChildren();
-        rendered = new Map();
+        startFade();
       }
     } catch (err) {
       /* Server restarting - keep the last frame on screen and retry. */

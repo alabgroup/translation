@@ -146,7 +146,7 @@ and the overlay picks them up on its next poll, so nothing restarts.
 | Shortest phrase kept | Lower to catch short responses. "Amen" alone is roughly 0.4 s of speech |
 | Longest phrase before a forced cut | Caps worst-case delay for a speaker who does not pause |
 | Lines on the overlay | How much history stays on screen |
-| Clear overlay after silence | 0 leaves the last lines up indefinitely |
+| Clear overlay after silence | Fades out after this long with no speech; 0 never clears. Default 60s — short values blank the panel during ordinary pauses, which reads as a fault |
 | Text size | Overlay text, in percent of canvas height |
 
 Note that the pause length and the shortest-phrase setting interact: trailing

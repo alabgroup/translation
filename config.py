@@ -121,8 +121,8 @@ TUNABLE = {
     "VISIBLE_LINES": dict(
         label="Lines on the overlay", unit="", min=1, max=12, step=1),
     "CLEAR_SUBTITLES_AFTER_SECONDS": dict(
-        label="Clear overlay after silence", unit="s", min=0, max=120, step=1,
-        help="0 leaves the last lines on screen indefinitely."),
+        label="Clear overlay after silence", unit="s", min=0, max=300, step=5,
+        help="Fades out after this long with no speech. 0 never clears."),
     "FONT_SIZE_VH": dict(
         label="Text size", unit="vh", min=1.5, max=8.0, step=0.1),
 }
@@ -162,7 +162,7 @@ PORT = 8000
 # --- Display ---
 # Clear subtitles from the overlay after this many seconds with no new speech.
 # Set to 0 to leave the last lines on screen indefinitely.
-CLEAR_SUBTITLES_AFTER_SECONDS = 12
+CLEAR_SUBTITLES_AFTER_SECONDS = 60
 VISIBLE_LINES = 8    # How many recent lines the overlay shows at once.
 FONT_SIZE_VH = 4.4   # Overlay text size, in percent of canvas height.
 
