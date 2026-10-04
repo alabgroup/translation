@@ -35,6 +35,34 @@ pip install -r requirements.txt
 First run downloads the Whisper model and the Argos language package
 (a few hundred MB); later runs start from the local cache.
 
+## Running it unattended
+
+`scripts/install-service.sh` installs Passage as a login service: it starts when
+the Mac logs in and restarts itself if it stops, so nobody needs a terminal on a
+Sunday.
+
+```bash
+./scripts/install-service.sh      # once
+./scripts/uninstall-service.sh    # to undo
+```
+
+It is a LaunchAgent rather than a LaunchDaemon deliberately — only the logged-in
+user's session can hold the microphone permission and see the audio devices.
+
+**One manual step the installer cannot do for you:** macOS must grant microphone
+access to `.venv/bin/python`. Run `python run.py` by hand once and allow the
+prompt. Without it the service runs happily and the level meter stays at zero.
+
+Logs go to `logs/passage.log`. To restart it by hand:
+
+```bash
+launchctl kickstart -k gui/$UID/com.alabgroup.passage
+```
+
+**[docs/sunday-runbook.md](docs/sunday-runbook.md)** is the page to hand a
+volunteer: how to check it is working, switch languages, and what to do when
+something looks wrong.
+
 ## Run
 
 ```bash

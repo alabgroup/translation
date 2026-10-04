@@ -155,5 +155,6 @@ WRITE_SRT = True           # Write transcript/translation .srt files next to the
 
 # Record the captured audio to output/<run>/audio.wav. Needed to evaluate
 # accuracy afterwards, since eval.py re-transcribes that audio with a larger
-# model. Off by default: it records everything the microphone hears.
-RECORD_AUDIO = True
+# model. Off by default: it records everything the microphone hears, and at
+# roughly 115 MB per hour an always-on service would fill the disk.
+RECORD_AUDIO = False
