@@ -16,6 +16,7 @@ from waitress import serve
 import config
 from app import audio, transcribe, transcript
 from app.sentences import SentenceBuffer
+from app import server
 from app.server import app
 from app.translate import Translator
 
@@ -105,6 +106,7 @@ def main():
         return
 
     translator = Translator().install_missing_packages()
+    server.set_translator(translator)   # lets the control page add languages
     transcribe.load_model()
 
     stop_event = threading.Event()

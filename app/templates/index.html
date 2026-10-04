@@ -190,6 +190,31 @@
   .note { font-size: 11.5px; color: var(--label-3); margin-top: 11px; line-height: 1.45; }
   .note.warn { color: var(--amber); }
 
+  /* ---- Language manager ---- */
+  #lang-search {
+    font: inherit; font-size: 12.5px; width: 100%; padding: 8px 10px;
+    color: var(--label); background: var(--surface-2);
+    border: 0.5px solid var(--separator); border-radius: var(--radius-sm);
+  }
+  #lang-search:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  #lang-list { max-height: 210px; overflow-y: auto; margin-top: 9px; }
+  .lang-row {
+    display: flex; align-items: center; gap: 8px; width: 100%;
+    font: inherit; font-size: 12.5px; text-align: left; cursor: pointer;
+    padding: 6px 8px; border: 0; border-radius: 7px;
+    background: transparent; color: var(--label);
+  }
+  .lang-row:hover { background: var(--surface-2); }
+  .lang-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+               white-space: nowrap; }
+  .lang-tag {
+    font-size: 9.5px; text-transform: uppercase; letter-spacing: 0.05em;
+    color: var(--label-3); white-space: nowrap;
+  }
+  .lang-row[data-active="true"] .lang-tag { color: var(--green); font-weight: 600; }
+  .lang-row[data-busy="true"] { opacity: 0.6; cursor: progress; }
+  .lang-row[data-busy="true"] .lang-tag { color: var(--amber); }
+
   /* ---- Sliders ---- */
   .tune + .tune { margin-top: 16px; }
   .tune-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
@@ -359,6 +384,17 @@
     </div>
 
     <div class="section">
+      <p class="section-title">Languages</p>
+      <div class="card">
+        <input id="lang-search" type="search" placeholder="Search languages…"
+               autocomplete="off" spellcheck="false">
+        <div id="lang-list"></div>
+        <p class="note" id="lang-note">First use of a language downloads it
+          (~100 MB). It stays on disk afterwards.</p>
+      </div>
+    </div>
+
+    <div class="section">
       <p class="section-title">Tuning</p>
       <div class="card">
         <div id="tuning"></div>
@@ -516,6 +552,79 @@
       }
     } catch (err) {}
   }
+
+  // ---- Language manager ----
+  const langSearch = document.getElementById("lang-search");
+  const langList = document.getElementById("lang-list");
+  const langNote = document.getElementById("lang-note");
+  let allLanguages = [];
+
+  function renderLanguages() {
+    const query = langSearch.value.trim().toLowerCase();
+    const matches = allLanguages
+      .filter(l => !query || l.name.toLowerCase().includes(query)
+                           || l.code.toLowerCase().startsWith(query))
+      // Active first, then already downloaded, then the rest alphabetically.
+      .sort((a, b) => (b.active - a.active) || (b.downloaded - a.downloaded)
+                      || a.name.localeCompare(b.name))
+      .slice(0, query ? 40 : 14);
+
+    if (!matches.length) {
+      langList.replaceChildren(Object.assign(document.createElement("div"),
+        {className: "note", textContent: "No language matches that."}));
+      return;
+    }
+    langList.replaceChildren(...matches.map(lang => {
+      const row = document.createElement("button");
+      row.className = "lang-row";
+      row.dataset.active = String(lang.active);
+      const busy = (lang.status || "").startsWith("installing");
+      row.dataset.busy = String(busy);
+
+      const name = document.createElement("span");
+      name.className = "lang-name"; name.textContent = lang.name;
+      const tag = document.createElement("span");
+      tag.className = "lang-tag";
+      tag.textContent = busy ? "installing…"
+        : lang.active ? "on"
+        : lang.downloaded ? "add" : "download";
+
+      row.append(name, tag);
+      row.addEventListener("click", () => toggleLanguage(lang));
+      return row;
+    }));
+  }
+
+  async function toggleLanguage(lang) {
+    const body = lang.active
+      ? {name: lang.name, remove: true}
+      : {name: lang.name, code: lang.code};
+    langNote.textContent = lang.active
+      ? `Removing ${lang.name}…`
+      : lang.downloaded ? `Adding ${lang.name}…`
+                        : `Downloading ${lang.name} — this takes a minute…`;
+    try {
+      const res = await fetch("/api/languages", {method: "POST",
+        headers: {"Content-Type": "application/json"}, body: JSON.stringify(body)});
+      if (!res.ok) langNote.textContent = (await res.json()).error || "That did not work.";
+    } catch (err) { langNote.textContent = "Could not reach the server."; }
+    loadLanguages();
+  }
+
+  async function loadLanguages() {
+    try {
+      const res = await fetch("/api/languages", {cache: "no-store"});
+      const data = await res.json();
+      allLanguages = data.languages || [];
+      if (data.error) langNote.textContent = data.error;
+      if (allLanguages.length) langSearch.placeholder = `Search ${allLanguages.length} languages…`;
+      renderLanguages();
+      // Keep polling while an install is in flight.
+      if (allLanguages.some(l => (l.status || "").startsWith("installing")))
+        setTimeout(loadLanguages, 2000);
+    } catch (err) {}
+  }
+  langSearch.addEventListener("input", renderLanguages);
 
   // ---- Tuning ----
   const tuning = document.getElementById("tuning");
@@ -807,6 +916,7 @@
 
   paintMute();
   loadTuning();
+  loadLanguages();
   pollLines(); pollAudio();
   setInterval(pollLines, 500);
   setInterval(pollAudio, 150);

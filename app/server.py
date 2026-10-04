@@ -1,5 +1,6 @@
 """Flask app serving the OBS overlay pages and the live transcript API."""
 
+import threading
 from pathlib import Path
 
 from flask import Flask, jsonify, render_template, request, abort
@@ -19,6 +20,16 @@ app.jinja_env.auto_reload = True
 # Preserve insertion order in JSON responses: sorted keys would list the
 # languages differently from the configured order the interface uses.
 app.json.sort_keys = False
+
+# Set by run.py once the translator exists. The language endpoints need it;
+# everything else works without one, so the screenshot harness and the tests
+# can serve the app standalone.
+_translator = None
+
+
+def set_translator(translator):
+    global _translator
+    _translator = translator
 
 
 @app.route("/")
@@ -117,6 +128,51 @@ def api_set_audio():
     if not changed:
         return jsonify({"error": "nothing to change"}), 400
     return jsonify(changed)
+
+
+@app.route("/api/languages")
+def api_languages():
+    """Every language Argos offers, with what is downloaded and what is live."""
+    if _translator is None:
+        return jsonify({"languages": [], "error": "translator not ready"})
+    options, error = _translator.available()
+    for option in options:
+        option["status"] = _translator.status.get(option["name"], "")
+    return jsonify({"languages": options, "error": error})
+
+
+@app.route("/api/languages", methods=["POST"])
+def api_add_language():
+    """Add or remove a language while the service runs.
+
+    Installing downloads a package, which can take a minute, so it happens on
+    a worker thread and the control page polls /api/languages for progress.
+    """
+    if _translator is None:
+        return jsonify({"error": "translator not ready"}), 503
+
+    payload = request.get_json(silent=True) or {}
+    name, code = payload.get("name"), payload.get("code")
+    if not name:
+        return jsonify({"error": "missing 'name'"}), 400
+
+    if payload.get("remove"):
+        if len(config.TARGET_LANGS) <= 1:
+            return jsonify({"error": "at least one language must stay active"}), 400
+        _translator.remove_language(name)
+        if transcript.active_language() == name:
+            transcript.set_active_language("Source")
+        return jsonify({"removed": name})
+
+    if not code:
+        return jsonify({"error": "missing 'code'"}), 400
+    if name in config.TARGET_LANGS:
+        return jsonify({"error": f"{name} is already active"}), 400
+
+    _translator.status[name] = "installing"
+    threading.Thread(target=_translator.add_language, args=(name, code),
+                     daemon=True, name=f"install-{code}").start()
+    return jsonify({"adding": name, "code": code}), 202
 
 
 @app.route("/health")
